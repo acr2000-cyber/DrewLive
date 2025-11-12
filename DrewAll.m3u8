@@ -1,0 +1,147 @@
+﻿#EXTM3U url-tvg="https://github.com/Drewski2423/DrewLive/raw/refs/heads/main/DrewLive.xml.gz"
+#EXTINF:-1  tvg-name="Adult Swim Daily Animated" tvg-id="24.7.Dummy.us" tvg-logo="https://i.ytimg.com/vi/8OXOnoO_AwY/maxresdefault.jpg" group-title="DrewLive Adult Swim 24/7" radio="false",Adult Swim Daily Animated
+https://adultswim-vodlive.cdn.turner.com/live/daily_animated_1/stream.m3u8
+#EXTINF:-1  tvg-name="Adult Swim Infomercials" tvg-id="24.7.Dummy.us" tvg-logo="https://i.ytimg.com/vi/8OXOnoO_AwY/maxresdefault.jpg" group-title="DrewLive Adult Swim 24/7" radio="false",Adult Swim Infomercials
+https://adultswim-vodlive.cdn.turner.com/live/infomercials/stream_de.m3u8
+#EXTINF:-1  tvg-name="Adult Swim Last Stream On The Left" tvg-id="24.7.Dummy.us" tvg-logo="https://i.ytimg.com/vi/8OXOnoO_AwY/maxresdefault.jpg" group-title="DrewLive Adult Swim 24/7" radio="false",Adult Swim Last Stream On The Left
+https://adultswim-vodlive.cdn.turner.com/live/lsotl/stream_de.m3u8
+#EXTINF:-1  tvg-name="Adult Swim Loiter Squad" tvg-id="24.7.Dummy.us" tvg-logo="https://i.ytimg.com/vi/FGdYZ0zxsbw/maxresdefault.jpg" group-title="DrewLive Adult Swim 24/7" radio="false",Adult Swim Loiter Squad
+https://adultswim-vodlive.cdn.turner.com/live/daily_liveaction_1/stream.m3u8
+#EXTINF:-1  tvg-name="Adult Swim Off The Air" tvg-id="24.7.Dummy.us" tvg-logo="https://i.ytimg.com/vi/8OXOnoO_AwY/maxresdefault.jpg" group-title="DrewLive Adult Swim 24/7" radio="false",Adult Swim Off The Air
+https://adultswim-vodlive.cdn.turner.com/live/off-the-air/stream_de.m3u8
+#EXTINF:-1  tvg-name="Adult Swim Robot Chicken" tvg-id="24.7.Dummy.us" tvg-logo="https://i.ytimg.com/vi/awp_znxxQm4/hq720.jpg?sqp=-oaymwEhCK4FEIIDSFryq4qpAxMIARUAAAAAGAElAADIQj0AgKJD&rs=AOn4CLCm7I6_f8CROKGh60YgADLbeNa0UQ" group-title="DrewLive Adult Swim 24/7" radio="false",Adult Swim Robot Chicken
+https://adultswim-vodlive.cdn.turner.com/live/robot-chicken/stream_de.m3u8
+#EXTINF:-1  tvg-name="Adult Swim Samurai Jack" tvg-id="24.7.Dummy.us" tvg-logo="https://thegeekchurch.com/wp-content/uploads/2014/09/samurai-jack-vs-aku.jpg" group-title="DrewLive Adult Swim 24/7" radio="false",Adult Swim Samurai Jack
+https://adultswim-vodlive.cdn.turner.com/live/samurai-jack/stream_de.m3u8
+#EXTINF:-1  tvg-name="Adult Swim The Eric Andre Show" tvg-id="24.7.Dummy.us" tvg-logo="https://upload.wikimedia.org/wikipedia/en/2/26/Eric_andre_show_title_screen.jpg" group-title="DrewLive Adult Swim 24/7" radio="false",Adult Swim The Eric Andre Show
+https://adultswim-vodlive.cdn.turner.com/live/eric-andre/stream_de.m3u8
+#EXTINF:-1  tvg-name="Aqua Teen Hunger Force" tvg-id="24.7.Dummy.us" tvg-logo="http://drewlive24.duckdns.org:9000/Logos/AquaTeen.png" group-title="DrewLive Adult Swim 24/7" radio="false",Aqua Teen Hunger Force
+https://adultswim-vodlive.cdn.turner.com/live/aqua-teen/stream.m3u8
+#EXTINF:-1  tvg-name="Black Jesus" tvg-id="24.7.Dummy.us" tvg-logo="https://static.wikia.nocookie.net/adultswim/images/7/75/Static.squarespace.png/revision/latest?cb=20170421043929" group-title="DrewLive Adult Swim 24/7" radio="false",Black Jesus
+https://adultswim-vodlive.cdn.turner.com/live/black-jesus/stream.m3u8
+#EXTINF:-1  tvg-name="Channel 5" tvg-id="24.7.Dummy.us" tvg-logo="https://media.cdn.adultswim.com/uploads/20190710/197101518217-channel5thumb.jpg" group-title="DrewLive Adult Swim 24/7" radio="false",Channel 5
+https://adultswim-vodlive.cdn.turner.com/live/channel-5/stream.m3u8
+#EXTINF:-1  tvg-name="Dream Corp LLC" tvg-id="24.7.Dummy.us" tvg-logo="https://m.media-amazon.com/images/M/MV5BNDE0ZGYzYzktZjQ5Zi00YThkLWE3OTUtMjRlNWZmMmMxMzI4XkEyXkFqcGc@._V1_.jpg" group-title="DrewLive Adult Swim 24/7" radio="false",Dream Corp LLC
+https://adultswim-vodlive.cdn.turner.com/live/DREAM-CORP-LLC/stream.m3u8
+#EXTINF:-1  tvg-name="Metalocalypse" tvg-id="24.7.Dummy.us" tvg-logo="http://drewlive24.duckdns.org:9000/Logos/Metalocalyse.png" group-title="DrewLive Adult Swim 24/7" radio="false",Metalocalypse
+https://adultswim-vodlive.cdn.turner.com/live/metalocalypse/stream.m3u8
+#EXTINF:-1  tvg-name="Mr. Pickles" tvg-id="24.7.Dummy.us" tvg-logo="https://m.media-amazon.com/images/M/MV5BOGRhNDQ2NTAtZTkzMy00YmRlLWJiZTgtMDg0NzkzYzk2YTI5XkEyXkFqcGc@._V1_.jpg" group-title="DrewLive Adult Swim 24/7" radio="false",Mr. Pickles
+http://adultswim-vodlive.cdn.turner.com/live/mr-pickles/stream.m3u8
+#EXTINF:-1  tvg-name="Rick and Morty" tvg-id="24.7.Dummy.us" tvg-logo="http://drewlive24.duckdns.org:9000/Logos/Rick%26Morty.png" group-title="DrewLive Adult Swim 24/7" radio="false",Rick and Morty
+https://adultswim-vodlive.cdn.turner.com/live/rick-and-morty/stream.m3u8
+#EXTINF:-1  tvg-name="Squidbillies" tvg-id="24.7.Dummy.us" tvg-logo="https://assets.exclaim.ca/image/upload/v1703880540/squid.jpg" group-title="DrewLive Adult Swim 24/7" radio="false",Squidbillies
+https://adultswim-vodlive.cdn.turner.com/live/squidbillies/stream.m3u8
+#EXTINF:-1  tvg-name="The Venture Bros." tvg-id="24.7.Dummy.us" tvg-logo="http://drewlive24.duckdns.org:9000/Logos/VentureBros.png" group-title="DrewLive Adult Swim 24/7" radio="false",The Venture Bros.
+https://adultswim-vodlive.cdn.turner.com/live/venture-bros/stream.m3u8
+#EXTINF:-1  tvg-name="Tim and Eric Awesome Show" tvg-id="24.7.Dummy.us" tvg-logo="https://ih1.redbubble.net/image.3039732013.6062/flat,750x,075,f-pad,750x1000,f8f8f8.jpg" group-title="DrewLive Adult Swim 24/7" radio="false",Tim and Eric Awesome Show
+http://adultswim-vodlive.cdn.turner.com/live/tim-and-eric/stream.m3u8
+#EXTINF:-1  tvg-name="Your Pretty Face is Going to Hell" tvg-id="24.7.Dummy.us" tvg-logo="https://m.media-amazon.com/images/M/MV5BYTE1YTg1MTktMDY3My00ZmZmLTkxZDItMDRmNDk1MjgyOGFmXkEyXkFqcGc@._V1_FMjpg_UX1000_.jpg" group-title="DrewLive Adult Swim 24/7" radio="false",Your Pretty Face is Going to Hell
+https://adultswim-vodlive.cdn.turner.com/live/ypf/stream.m3u8
+#EXTINF:-1  tvg-name="CVM" tvg-id="Local.Programming.Dummy.us" tvg-logo="https://cvssja.org/wp-content/uploads/2020/06/CVM-Logo-2016.png" group-title="DrewLive Caribbean" radio="false",CVM (Jamaica)
+http://1tv41.icu:8080/5ZCJFs/416986/66371
+#EXTINF:-1  tvg-name="JNN" tvg-id="Local.Programming.Dummy.us" tvg-logo="https://grassrootsjusticenetwork.org/wp-content/uploads/2018/08/jn_plus_logo_website.png" group-title="DrewLive Caribbean" radio="false",JNN (Jamaica)
+http://1tv41.icu:8080/5ZCJFs/416986/99566
+#EXTINF:-1  tvg-name="RETV" tvg-id="Local.Programming.Dummy.us" tvg-logo="https://www.siliconcaribe.com/wp-content/uploads/2008/07/retv-logo.jpg" group-title="DrewLive Caribbean" radio="false",RETV (Jamaica)
+http://1tv41.icu:8080/5ZCJFs/416986/21094
+#EXTINF:-1  tvg-name="RUSH Sports" tvg-id="Local.Programming.Dummy.us" tvg-logo="https://github.com/tv-logo/tv-logos/blob/main/countries/caribbean/rush-car.png?raw=true" group-title="DrewLive Caribbean" radio="false",RUSH Sports (Any Caribbean Country)
+http://1tv41.icu:8080/5ZCJFs/416986/100043
+#EXTINF:-1  tvg-name="TV Direct 13" tvg-id="Local.Programming.Dummy.us" tvg-logo="https://www.cur.watch/images/kodi_icon.png" group-title="DrewLive Caribbean" radio="false",TV Direct 13 (Curaçao)
+http://1tv41.icu:8080/5ZCJFs/416986/216085
+#EXTINF:-1  tvg-name="TVJ (Jamaica)" tvg-id="Television.Jamaica.jm" tvg-logo="https://outsource2jamaica.com/wp-content/uploads/2021/05/Television-Jamaica-Limited-TVJ.png" group-title="DrewLive Caribbean" radio="false",TVJ (Jamaica)
+http://1tv41.icu:8080/5ZCJFs/416986/78918
+#EXTINF:-1  tvg-name="TVJ Sports" tvg-id="Local.Programming.Dummy.us" tvg-logo="https://www.reggaemarathon.com/wp-content/uploads/2019/03/tvj-sports-logo.png" group-title="DrewLive Caribbean" radio="false",TVJ Sports (Jamaica)
+http://1tv41.icu:8080/5ZCJFs/416986/66077
+#EXTINF:-1  tvg-name="[after swim]" tvg-id="24.7.Dummy.us" tvg-logo="https://afterswim.org/logo" group-title="DrewLive Fan Made TV" radio="false",[after swim]
+https://sfo3.digitaloceanspaces.com/wiitux-s3/hls/0/stream.m3u8?cachebust=bed568
+#EXTINF:-1  tvg-name="24/7 Chiptune Radio" tvg-id="24.7.Dummy.us" tvg-logo="https://watch.chiptune.fm/logo" group-title="DrewLive Fan Made TV" radio="false",24/7 Chiptune Radio
+https://watch.chiptune.fm/hls/0/stream.m3u8?cachebust=a0a999
+#EXTINF:-1  tvg-name="Cannabis Grow" tvg-id="24.7.Dummy.us" tvg-logo="https://grow.dwot.io/logo" group-title="DrewLive Fan Made TV" radio="false",Cannabis Grow
+https://grow.dwot.io/hls/1/stream.m3u8?cachebust=7ad5acb5
+#EXTINF:-1  tvg-name="Classic Cube" tvg-id="24.7.Dummy.us" tvg-logo="http://drewlive24.duckdns.org:9000/Logos/Gamecube.png" group-title="DrewLive Fan Made TV" radio="false",Classic Cube
+https://sfo3.digitaloceanspaces.com/s3cube/hls/2/stream.m3u8?cachebust=b4854a
+#EXTINF:-1  tvg-name="Deflect" tvg-id="24.7.Dummy.us" tvg-logo="https://www.webchnl.live/assets/img/channelicons/deflect.png" group-title="DrewLive Fan Made TV" radio="false",Deflect
+https://rhine.webchnl.live/memfs/8a788628-af64-4fae-8dac-2fcb9d1c4eae.m3u8
+#EXTINF:-1  tvg-name="Drew Live" tvg-id="24.7.Dummy.us" tvg-logo="http://drewlive24.duckdns.org:9000/Logos/Trunks.png" group-title="DrewLive Fan Made TV" radio="false",Drew Live
+http://drewlive24.duckdns.org:8080/hls/stream.m3u8
+#EXTINF:-1  tvg-name="EEL TV" tvg-id="24.7.Dummy.us" tvg-logo="https://www.webchnl.live/assets/img/channelicons/eel_ch.png" group-title="DrewLive Fan Made TV" radio="false",EEL TV
+https://rhine.webchnl.live/memfs/ee44b078-5b16-4484-b054-76079dc2d45c.m3u8
+#EXTINF:-1  tvg-name="Festivals and Studio Sessions 🎧🎶" tvg-id="24.7.Dummy.us" tvg-logo="http://drewlive24.duckdns.org:9000/Logos/Music.png" group-title="DrewLive Fan Made TV" radio="false",Festivals and Studio Sessions 🎧🎶
+https://rumble.com/live-hls-dvr/6yf72m/playlist.m3u8?
+#EXTINF:-1  tvg-name="INFOWARS NETWORK FEED: LIVE 247!" tvg-id="24.7.Dummy.us" tvg-logo="https://1a-1791.com/video/z8/R/j/i/b/Rjiba.baa.a-TheAlexJonesShow-t0zsft.jpeg" group-title="DrewLive Fan Made TV" radio="false",INFOWARS NETWORK FEED: LIVE 247!
+https://rumble.com/live-hls-dvr/64cgzd/playlist.m3u8?
+#EXTINF:-1  tvg-name="Lofi Hip-Hop Radio" tvg-id="24.7.Dummy.us" tvg-logo="https://images.squarespace-cdn.com/content/v1/580fbaac440243d8731ffc57/46cb49b3-63d7-40e1-9cd0-540fbecdc39c/Lofi+Girl+16x9.jpeg" group-title="DrewLive Fan Made TV" radio="false",Lofi Hip-Hop Radio
+https://rumble.com/live-hls/1essrt/playlist.m3u8?
+#EXTINF:-1  tvg-name="Nonstop Rain for Calming Vibes" tvg-id="24.7.Dummy.us" tvg-logo="http://drewlive24.duckdns.org:9000/Logos/Rain.png" group-title="DrewLive Fan Made TV" radio="false",Nonstop Rain for Calming Vibes
+https://rumble.com/live-hls-dvr/6z1vhm/playlist.m3u8
+#EXTINF:-1  tvg-name="Object" tvg-id="24.7.Dummy.us" tvg-logo="https://www.webchnl.live/assets/img/channelicons/objectcentral.png" group-title="DrewLive Fan Made TV" radio="false",Object
+https://rhine.webchnl.live/memfs/dfac9472-bf8f-455c-8306-68184073a2f8.m3u8
+#EXTINF:-1  tvg-name="Play Movies TV" tvg-id="24.7.Dummy.us" tvg-logo="https://watch.playmovies.co.za/logo" group-title="DrewLive Fan Made TV" radio="false",Play Movies TV
+https://watch.playmovies.co.za/hls/0/stream.m3u8?cachebust=03f959
+#EXTINF:-1  tvg-name="Retro Blast" tvg-id="24.7.Dummy.us" tvg-logo="https://static1.howtogeekimages.com/wordpress/wp-content/uploads/2025/01/shutterstock_2221828967.jpg" group-title="DrewLive Fan Made TV" radio="false",Retro Blast
+https://retroblast.tv/hls/0/stream.m3u8?cachebust=f224d41f
+#EXTINF:-1  tvg-name="RetroStrange TV" tvg-id="24.7.Dummy.us" tvg-logo="http://drewlive24.duckdns.org:9000/Logos/RetroStrange.png" group-title="DrewLive Fan Made TV" radio="false",RetroStrange TV
+https://live.retrostrange.com/hls/0/stream.m3u8?cachebust=fc39b1
+#EXTINF:-1  tvg-name="Spark TV" tvg-id="24.7.Dummy.us" tvg-logo="https://www.webchnl.live/assets/img/channelicons/spark.png" group-title="DrewLive Fan Made TV" radio="false",Spark TV
+https://rhine.webchnl.live/memfs/52b4200e-6ea9-4119-be31-0e73fa9c7d64.m3u8
+#EXTINF:-1  tvg-name="SportsWorm" tvg-id="24.7.Dummy.us" tvg-logo="https://1a-1791.com/video/z0/V/f/u/Z/VfuZo.asF-43umpb-smjc4r.jpeg" group-title="DrewLive Fan Made TV" radio="false",SportsWorm
+https://rumble.com/live-hls-dvr/6z2we2/playlist.m3u8?level=1
+#EXTINF:-1  tvg-name="Swim Rewind" tvg-id="24.7.Dummy.us" tvg-logo="https://swimrewind.com/logo" group-title="DrewLive Fan Made TV" radio="false",Swim Rewind
+https://swimrewind.com/hls/0/stream.m3u8?cachebust=215d168f
+#EXTINF:-1  tvg-name="Synthwave Radio 🌌 - beats to chill/game to" tvg-id="24.7.Dummy.us" tvg-logo="https://1a-1791.com/video/z8/P/P/4/g/PP4ga.baa.3-LofiGirl-smjcy4.png" group-title="DrewLive Fan Made TV" radio="false",Synthwave Radio 🌌 - beats to chill/game to
+https://rumble.com/live-hls/2lh8yh/playlist.m3u8?
+#EXTINF:-1  tvg-name="The Void" tvg-id="24.7.Dummy.us" tvg-logo="https://png.pngtree.com/png-vector/20220530/ourmid/pngtree-monkey-trippy-psychedelic-vector-illustrations-for-your-work-logo-png-image_4762700.png" group-title="DrewLive Fan Made TV" radio="false",The Void
+https://mthrbord.tv/hls/0/stream.m3u8
+#EXTINF:-1  tvg-name="TheUpperLeft" tvg-id="24.7.Dummy.us" tvg-logo="https://theupperleft.thesprawl.online/logo" group-title="DrewLive Fan Made TV" radio="false",TheUpperLeft
+https://theupperleft.thesprawl.online/hls/0/stream.m3u8?cachebust=2f690bd7
+#EXTINF:-1  tvg-name="Toonami Aftermath East" tvg-id="24.7.Dummy.us" tvg-logo="https://raw.githubusercontent.com/kbmystery7/TAM3U8/main/ta%20wall%20thumb%20east.jpg" group-title="DrewLive Fan Made TV" radio="false",Toonami Aftermath East
+http://api.toonamiaftermath.com:3000/est/playlist.m3u8
+#EXTINF:-1  tvg-id="24.7.Dummy.us" tvg-logo="https://raw.githubusercontent.com/kbmystery7/TAM3U8/main/ta%20wall%20thumb%20radio.jpg" group-title="DrewLive Fan Made TV" radio="false",Toonami Aftermath Radio
+http://api.toonamiaftermath.com:3000/radio/playlist.m3u8
+#EXTINF:-1  tvg-name="Toonami Aftermath Movies" tvg-id="24.7.Dummy.us" tvg-logo="https://raw.githubusercontent.com/kbmystery7/TAM3U8/main/ta%20wall%20thumb%20movies.jpg" group-title="DrewLive Fan Made TV" radio="false",Toonami Aftermath Movies
+http://api.toonamiaftermath.com:3000/movies/playlist.m3u8
+#EXTINF:-1  tvg-name="Toonami Aftermath West" tvg-id="24.7.Dummy.us" tvg-logo="https://raw.githubusercontent.com/kbmystery7/TAM3U8/main/ta%20wall%20thumb%20west.jpg" group-title="DrewLive Fan Made TV" radio="false",Toonami Aftermath West
+http://api.toonamiaftermath.com:3000/pst/playlist.m3u8
+#EXTINF:-1  tvg-name="Unusual Art" tvg-id="24.7.Dummy.us" tvg-logo="https://stream.unusualart.net/logo" group-title="DrewLive Fan Made TV" radio="false",Unusual Art
+https://stream.unusualart.net/hls/0/stream.m3u8?cachebust=a4240d
+#EXTINF:-1  tvg-name="Verniy TV" tvg-id="24.7.Dummy.us" tvg-logo="https://live.verniy.tv/logo" group-title="DrewLive Fan Made TV" radio="false",Verniy TV
+https://live.verniy.tv/hls/1/stream.m3u8?cachebust=cfc8df
+#EXTINF:-1  tvg-name="Whiplash" tvg-id="24.7.Dummy.us" tvg-logo="https://www.webchnl.live/assets/img/channelicons/whiplash.png" group-title="DrewLive Fan Made TV" radio="false",Whiplash
+https://rhine.webchnl.live/memfs/ac0f016c-e39c-4fa5-885d-b90aec65b076.m3u8
+#EXTINF:-1  tvg-name="Whiplash Cinema" tvg-id="24.7.Dummy.us" tvg-logo="https://www.webchnl.live/assets/img/channelicons/whiplashcinema.png" group-title="DrewLive Fan Made TV" radio="false",Whiplash Cinema
+https://rhine.webchnl.live/memfs/3727506f-9e14-4f8e-af12-cdc8c597640c.m3u8
+#EXTINF:-1  tvg-name="WXX" tvg-id="24.7.Dummy.us" tvg-logo="https://webchnl.com/assets/img/channelicons/wxx.png" group-title="DrewLive Fan Made TV" radio="false",WXX
+https://rhine.webchnl.live/memfs/86695e51-c500-4939-b3e8-73a2db21741d.m3u8
+#EXTINF:-1  tvg-name="iHeartRadio Hip Hop Beats (DrewLive)" tvg-id="24.7.Dummy.us" tvg-logo="https://image.xumo.com/v1/channels/channel/9995103/600x337.webp?type=channelTile" group-title="DrewLive Music Video Channels" radio="false",iHeartRadio Hip Hop Beats (DrewLive)
+https://dbrb49pjoymg4.cloudfront.net/10001/9995103/hls/hls.m3u8?ads.xumo_channelId=9995103&ads._fw_ifa_type=&ads._fw_did=af4091fe-a52f-4e07-903e-b43c1cccae33&ads.amznappId=&ads.lat=&ads.lon=&ads.os=&ads.osv=&ads.asnw=&ads.caid=iHeartTheBeat&ads.csid=xumo_web_iHeartTheBeat_ssai&ads._fw_is_lat=0&ads._fw_us_privacy=&ads._fw_coppa=0&ads.genre=&ads._fw_content_category=&ads._fw_content_language=en&ads._fw_content_genre=&ads._fw_content_rating=&ads.xumo_contentId=3521&ads.xumo_contentName=iHeartTheBeat&ads.xumo_providerId=3521&ads.xumo_providerName=iHeartTheBeat&ads._fw_deviceMake=GitHubAction&ads._fw_device_model=PythonScript&ads.channelId=9995103&ads.xumo_platform=web&ads.site_id=&ads.appName=xumo&ads.appVersion=1.0.0&ads._fw_app_bundle=web.xumo.com&ads._fw_app_store_url=
+#EXTINF:-1  tvg-name="Stingray Hip Hop (DrewLive)" tvg-id="USBD3500010MT" tvg-logo="https://tvpnlogopus.samsungcloud.tv/platform/image/sourcelogo/vc/00/02/34/USBD3500010MT_20250630T232455SQUARE.png" group-title="DrewLive Music Video Channels" radio="false",Stingray Hip Hop (DrewLive)
+https://jmp2.uk/stvp-USBD3500010MT
+#EXTINF:-1  tvg-name="Vevo 2K (DrewLive)" tvg-id="USBB4400015F5" tvg-logo="https://images.sr.roku.com/idType/roku/context/trc/id/94759dbd58a65682bcc573932f725f46/https%3A%2F%2Fimage.roku.com%2Fbh-uploads%2Fproduction%2FinfoHUDLogo%2F1675113375186_Info_HUD_Logo_260X147_center_%252819%2529.png" group-title="DrewLive Music Video Channels" radio="false",Vevo 2K (DrewLive)
+https://jmp2.uk/stvp-USBB4400015F5
+#EXTINF:-1  tvg-name="Vevo '90s & '00s (DrewLive)" tvg-id="GBBC2100002HP" tvg-logo="https://tvpnlogopeu.samsungcloud.tv/platform/image/sourcelogo/vc/00/02/34/GBBC2100002HP_20250107T025831SQUARE.png" group-title="DrewLive Music Video Channels" radio="false",Vevo '90s & '00s (DrewLive)
+https://jmp2.uk/stvp-GBBC2100002HP
+#EXTINF:-1  tvg-name="Vevo Hip Hop & R&B (DrewLive)" tvg-id="GBBD2300001C0" tvg-logo="https://tvpnlogopeu.samsungcloud.tv/platform/image/sourcelogo/vc/00/02/34/GBBD2300001C0_20250107T030829SQUARE.png" group-title="DrewLive Music Video Channels" radio="false",Vevo Hip Hop & R&B (DrewLive)
+https://jmp2.uk/stvp-GBBD2300001C0
+#EXTINF:-1  tvg-name="Vevo Hip-Hop (DrewLive)" tvg-id="USBC3600002EK" tvg-logo="https://indexedev.com/images/fall-of-vevo.jpg" group-title="DrewLive Music Video Channels" radio="false",Vevo Hip-Hop (DrewLive)
+https://jmp2.uk/stvp-USBC3600002EK
+#EXTINF:-1  tvg-name="Vevo R&B (DrewLive)" tvg-id="USBC3900009K5" tvg-logo="https://i.ytimg.com/vi/kyxKSEOg2iQ/hq720.jpg?sqp=-oaymwEXCK4FEIIDSFryq4qpAwkIARUAAIhCGAE=&rs=AOn4CLCC8xrWK4rOzFX2ZcgCgVBfaV4Msw" group-title="DrewLive Music Video Channels" radio="false",Vevo R&B (DrewLive)
+https://jmp2.uk/plu-5da0d83f66c9700009b96d0e.m3u8
+#EXTINF:-1  tvg-name="Vevo Rock" tvg-id="61d4b38226b8a50007fe03a6" tvg-logo="https://images.pluto.tv/channels/61d4b38226b8a50007fe03a6/colorLogoPNG_1748797615724.png" group-title="DrewLive Music Video Channels" radio="false",Vevo Rock (DrewLive)
+https://jmp2.uk/plu-61d4b38226b8a50007fe03a6.m3u8
+#EXTINF:-1  tvg-name="Vevo True School Hip-Hop (DrewLive)" tvg-id="61d4c2817a823d00070ba53e" tvg-logo="https://images.pluto.tv/channels/61d4c2817a823d00070ba53e/featuredImage.jpg?auto=&q=70&fit=fill&fill=blur&ixlib=react-9.1.5" group-title="DrewLive Music Video Channels" radio="false",Vevo True School Hip-Hop (DrewLive)
+https://jmp2.uk/plu-61d4c2817a823d00070ba53e.m3u8
+#EXTINF:-1  tvg-name="XITE Hits (DrewLive)" tvg-id="CABD1200038NZ" tvg-logo="https://tvpnlogopus.samsungcloud.tv/platform/image/sourcelogo/vc/00/02/34/CABD1200038NZ_20250812T003400SQUARE.png" group-title="DrewLive Music Video Channels" radio="false",XITE Hits (DrewLive)
+https://jmp2.uk/stvp-CABD1200038NZ
+#EXTINF:-1  tvg-name="XITE Just Chill (DrewLive)" tvg-id="CABB2600004RZ" tvg-logo="https://tvpnlogopus.samsungcloud.tv/platform/image/sourcelogo/vc/00/02/34/CABB2600004RZ_20250812T003221SQUARE.png" group-title="DrewLive Music Video Channels" radio="false",XITE Just Chill (DrewLive)
+https://jmp2.uk/stvp-CABB2600004RZ
+#EXTINF:-1  tvg-name="XITE R&B Classic Jams (DrewLive)" tvg-id="USBD330000948" tvg-logo="https://tvpnlogopus.samsungcloud.tv/platform/image/sourcelogo/vc/00/02/34/USBD330000948_20240716T002648SQUARE.png" group-title="DrewLive Music Video Channels" radio="false",XITE R&B Classic Jams (DrewLive)
+https://jmp2.uk/stvp-CABD1200021MS
+#EXTINF:-1  tvg-name="XITE Reggae Vibes (DrewLive)" tvg-id="US4600008JA" tvg-logo="https://tvpnlogopus.samsungcloud.tv/platform/image/sourcelogo/vc/00/02/34/CA4600018HP_20250812T003407SQUARE.png" group-title="DrewLive Music Video Channels" radio="false",XITE Reggae Vibes (DrewLive)
+https://jmp2.uk/stvp-US4600008JA
+#EXTINF:-1  tvg-name="XITE Rock x Metal (DrewLive)" tvg-id="623a1b5188ecdc0007c9ef5a" tvg-logo="https://images.pluto.tv/channels/623a1b5188ecdc0007c9ef5a/colorLogoPNG.png" group-title="DrewLive Music Video Channels" radio="false",XITE Rock x Metal (DrewLive)
+https://jmp2.uk/plu-623a1b5188ecdc0007c9ef5a.m3u8
+#EXTINF:-1  tvg-name="Yo! MTV (DrewLive)" tvg-id="5d14fc31252d35decbc4080b" tvg-logo="https://images.pluto.tv/channels/5d14fc31252d35decbc4080b/colorLogoPNG.png" group-title="DrewLive Music Video Channels" radio="false",Yo! MTV (DrewLive)
+https://jmp2.uk/plu-5d14fc31252d35decbc4080b.m3u8
+#EXTINF:-1  tvg-name="Whiplash 2" tvg-id="24.7.Dummy.us" tvg-logo="https://webchnl.com/assets/img/channelicons/whiplash2.png" group-title="DrewLive Fan Made TV" radio="false",Whiplash 2
+https://rhine.webchnl.live/memfs/86695e51-c500-4939-b3e8-73a2db21741d.m3u8
+#EXTINF:-1  tvg-name="Zenith" tvg-id="24.7.Dummy.us" tvg-logo="https://webchnl.com/assets/img/channelicons/zenith.png" group-title="DrewLive Fan Made TV" radio="false",Zenith
+https://rhine.webchnl.live/memfs/cb13ac41-a487-45a3-a9d2-cd98906819dd.m3u8
