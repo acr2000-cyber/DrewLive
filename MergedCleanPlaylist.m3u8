@@ -48,52 +48,6 @@ https://playlist.streameast247.com/playlist/stream_nba1.m3u8?md5=ZLJCxwhIYe_o8KC
 #EXTINF:-1 tvg-id="Football.Dummy.us" tvg-name="Jets vs Patriots" tvg-logo="https://artwork.espncdn.com/categories/ad4c3bd2-ddb6-3f8c-8abf-744855a08fa4/logo/original_201807271434.svg" group-title="StreamBTW - NFL",Jets vs Patriots
 https://streameast247.com/playlist/stream_nfl1.m3u8?md5=MGFTizamXVplfZaTDRfbfg&expires=1762978400
 
-#EXTGRP:StreamEast - NBA
-#EXTINF:-1 tvg-id="NBA.Basketball.Dummy.us" tvg-logo="https://v2.streameast.ga/images/atlanta-hawks.svg" group-title="StreamEast - NBA",Atlanta Hawks vs Phoenix Suns
-#EXTVLCOPT:http-origin=https://streamcenter.pro
-#EXTVLCOPT:http-referrer=https://streamcenter.pro/
-#EXTVLCOPT:http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36
-https://edgestreams.pro/hls/ztyarueaghj71.m3u8?st=-0U0h90HDOdGowMRLBC7sRHq4kdWsBw5tlhbzmCuJPQ&e=1763356301
-#EXTINF:-1 tvg-id="NBA.Basketball.Dummy.us" tvg-logo="https://v2.streameast.ga/images/chicago-bulls.svg" group-title="StreamEast - NBA",Chicago Bulls vs Utah Jazz
-#EXTVLCOPT:http-origin=https://streamcenter.pro
-#EXTVLCOPT:http-referrer=https://streamcenter.pro/
-#EXTVLCOPT:http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36
-https://mainstreams.pro/hls/pllmazjkdzajh72.m3u8?st=35wSn2VIjNTyM9jacOH5on9ArVJ0A675gxsQiwb6DKQ&e=1763356304
-#EXTINF:-1 tvg-id="NBA.Basketball.Dummy.us" tvg-logo="https://v2.streameast.ga/images/golden-state-warriors.svg" group-title="StreamEast - NBA",Golden State Warriors vs New Orleans Pelicans
-#EXTVLCOPT:http-origin=https://streamcenter.pro
-#EXTVLCOPT:http-referrer=https://streamcenter.pro/
-#EXTVLCOPT:http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36
-https://edge2caster.pro/hls/zeafwqvhfe69.m3u8?st=fKx9F5wl6NHi9Ipq0KAGdAkF8nABTb5bnsIRwvmP8mw&e=1763356294
-#EXTINF:-1 tvg-id="NBA.Basketball.Dummy.us" tvg-logo="https://v2.streameast.ga/images/orlando-magic.svg" group-title="StreamEast - NBA",Orlando Magic vs Houston Rockets
-#EXTVLCOPT:http-origin=https://streamcenter.pro
-#EXTVLCOPT:http-referrer=https://streamcenter.pro/
-#EXTVLCOPT:http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36
-https://edgestreams.pro/hls/zayrtezafgvdv68.m3u8?st=dhrT4B5TcYyg84RgOJJY3XV4LO1q7u2EKpUK9S54Sb0&e=1763356289
-#EXTINF:-1 tvg-id="NBA.Basketball.Dummy.us" tvg-logo="https://v2.streameast.ga/images/portland-trail-blazers.svg" group-title="StreamEast - NBA",Portland Trail Blazers vs Dallas Mavericks
-#EXTVLCOPT:http-origin=https://streamcenter.pro
-#EXTVLCOPT:http-referrer=https://streamcenter.pro/
-#EXTVLCOPT:http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36
-https://edgestreams.pro/hls/bvnsqdfvgha70.m3u8?st=KyHMrwwRTr4ZOP050Ze8VNr3Y84wdXWDawIE-mJVWSE&e=1763356298
-
-#EXTGRP:StreamEast - NFL
-#EXTINF:-1 tvg-id="NFL.Dummy.us" tvg-logo="https://v2.streameast.ga/images/detroit-lions.svg" group-title="StreamEast - NFL",Detroit Lions vs Philadelphia Eagles
-#EXTVLCOPT:http-origin=https://streamcenter.pro
-#EXTVLCOPT:http-referrer=https://streamcenter.pro/
-#EXTVLCOPT:http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36
-https://edge2caster.pro/hls/wnbcnxbcs42.m3u8?st=elA_10LjW0A7SJTYyPbruKTxCIauLI6L0TmzIe_ovjE&e=1763356314
-
-#EXTGRP:StreamEast - NHL
-#EXTINF:-1 tvg-id="NHL.Hockey.Dummy.us" tvg-logo="https://v2.streameast.ga/images/detroit-red-wings.svg" group-title="StreamEast - NHL",Detroit Red Wings vs New York Rangers
-#EXTVLCOPT:http-origin=https://streamcenter.pro
-#EXTVLCOPT:http-referrer=https://streamcenter.pro/
-#EXTVLCOPT:http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36
-https://edge2caster.pro/hls/rtzaeyvhb53.m3u8?st=hZzVXOdVdBENZpJF4lr6cHCRZ1jHPUVvZ6l1nlVoqNI&e=1763356307
-#EXTINF:-1 tvg-id="NHL.Hockey.Dummy.us" tvg-logo="https://v2.streameast.ga/images/new-york-islanders.svg" group-title="StreamEast - NHL",New York Islanders vs Colorado Avalanche
-#EXTVLCOPT:http-origin=https://streamcenter.pro
-#EXTVLCOPT:http-referrer=https://streamcenter.pro/
-#EXTVLCOPT:http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36
-https://mainstreams.pro/hls/bnvcxwhfg54.m3u8?st=uU2SJQLxnwY37dTN2QNa6WDzC124s6WimC5Eyda3XYM&e=1763356310
-
 #EXTGRP:StreamedSU - Basketball
 #EXTINF:-1 tvg-id="Basketball.Dummy.us" tvg-name="Basketball Champions League: AEK vs VEF Riga" tvg-logo="http://drewlive24.duckdns.org:9000/Logos/Basketball5.png" group-title="StreamedSU - Basketball",Basketball Champions League: AEK vs VEF Riga
 #EXTVLCOPT:http-origin=https://embedsports.top
