@@ -1,0 +1,62 @@
+name: 🔄 Force Update TVPass Playlist
+
+on:
+  schedule:
+    - cron: '0 * * * *'  # ⏱ Every 1 hour (UTC)
+  workflow_dispatch:      # 🔘 Manual trigger
+
+permissions:
+  contents: write
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: 🐍 Set up Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: 📦 Install dependencies
+        run: pip install requests
+
+      - name: 🎯 Run scraping script
+        run: |
+          echo "▶ Running tvpass.py..."
+          python tvpass.py
+          echo "✅ Script finished."
+
+      - name: 💾 Commit & Push if Playlist Changed
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions@users.noreply.github.com"
+
+          git add TVPass.m3u
+
+          if git diff --cached --quiet; then
+            echo "✅ No changes detected in TVPass.m3u — skipping commit."
+            exit 0
+          fi
+
+          git commit -m "🔁 Update playlist $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+
+          echo "📤 Attempting to push..."
+          if ! git push origin HEAD; then
+            echo "⚠️ Push failed. Attempting rebase..."
+            git pull --rebase origin HEAD || {
+              echo "❌ Rebase failed — exiting to prevent corruption."
+              exit 1
+            }
+            git push origin HEAD || {
+              echo "❌ Push failed again — giving up."
+              exit 1
+            }
+          fi
