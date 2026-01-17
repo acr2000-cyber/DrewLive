@@ -103,11 +103,25 @@ COLLEGE_TEAMS = {
 async def grab_m3u8_from_iframe(page, iframe_url):
     found_streams = set()
     
+    def handle_request(request):
+        url = request.url
+        if ".m3u8" in url:
+            print(f"🎯 M3U8 in REQUEST: {url}")
+            found_streams.add(url)
+    
     def handle_response(response):
-        if ".m3u8" in response.url:
-            print(f"✅ Found M3U8 Stream: {response.url}")
-            found_streams.add(response.url)
+        url = response.url
+        content_type = response.headers.get('content-type', '').lower()
+        
+        # Check for M3U8 by URL or content-type
+        if ".m3u8" in url or "mpegurl" in content_type or "application/vnd.apple.mpegurl" in content_type:
+            print(f"✅ Found M3U8 Stream: {url}")
+            found_streams.add(url)
+        # Also log .ts segments (indicates stream is playing)
+        elif ".ts" in url and "segment" in url.lower():
+            print(f"🎬 Detected .ts segment (stream active): {url[:100]}...")
 
+    page.on("request", handle_request)
     page.on("response", handle_response)
     print(f"🌐 Navigating to iframe: {iframe_url}")
     
@@ -125,39 +139,77 @@ async def grab_m3u8_from_iframe(page, iframe_url):
             print("✅ Page loaded (load state)")
         except:
             pass
+        page.remove_listener("request", handle_request)
         page.remove_listener("response", handle_response)
         return set()
 
-    # Wait for content to fully load
+    # Wait for initial content to load
     await asyncio.sleep(5)
     
-    # Try multiple interaction methods
+    # Check for nested iframes
     try:
-        # Try clicking on the page to trigger any dynamic content
-        await page.click("body", timeout=5000)
-        print("✅ Clicked on page body to trigger content")
+        iframes = await page.locator('iframe').all()
+        if iframes:
+            print(f"📦 Found {len(iframes)} nested iframe(s)")
+            for i, iframe in enumerate(iframes):
+                try:
+                    src = await iframe.get_attribute('src')
+                    if src:
+                        print(f"  → Nested iframe {i+1}: {src}")
+                except:
+                    pass
+    except Exception as e:
+        print(f"⚠️ Could not check for nested iframes: {e}")
+    
+    # Debug: Check page content
+    try:
+        page_content = await page.content()
+        if "player" in page_content.lower():
+            print("✅ Player-related content detected in HTML")
+        if "m3u8" in page_content.lower():
+            print("🎯 M3U8 reference found in page source!")
     except:
         pass
-        
-    # Wait for more content to load
-    await asyncio.sleep(5)
+    
+    # Try multiple interaction methods to trigger stream loading
+    interactions = [
+        ("body click", lambda: page.click("body", timeout=5000)),
+        ("video element", lambda: page.click("video", timeout=5000)),
+        ("play button", lambda: page.click("button.play, .vjs-big-play-button, [aria-label*='Play']", timeout=5000)),
+        ("iframe click", lambda: page.click("iframe", timeout=5000)),
+        ("center hover", lambda: page.mouse.move(960, 540)),
+        ("center click", lambda: page.mouse.click(960, 540)),
+    ]
+    
+    for name, action in interactions:
+        try:
+            await action()
+            print(f"✅ Triggered: {name}")
+            await asyncio.sleep(3)  # Wait after each interaction
+            if found_streams:  # Exit early if stream found
+                print(f"🎉 Stream found after {name}, skipping remaining interactions")
+                break
+        except Exception as e:
+            print(f"⚠️ Could not trigger {name}: {e}")
 
-    print("⏳ Waiting for stream to be requested (max 25s)...")
+    # Extended wait for stream request (increased from 25s to 40s)
+    print("⏳ Waiting for stream to be requested (max 40s)...")
     try:
         await page.wait_for_event(
             "response",
             lambda resp: ".m3u8" in resp.url,
-            timeout=25000
+            timeout=40000  # Increased timeout
         )
         print("✅ M3U8 stream detected. Proceeding immediately to validation.")
     except PlaywrightTimeoutError:
-        print("⚠️ Stream request did not start within 25 seconds. Checking for streams anyway...")
+        print("⚠️ Stream request did not start within 40 seconds. Checking for streams anyway...")
     except Exception as e:
         print(f"❌ Failed during wait for M3U8 event: {e}")
 
-    # Give it a bit more time to capture any late-loading streams
-    await asyncio.sleep(3)
+    # Final wait to capture late-loading streams
+    await asyncio.sleep(5)
 
+    page.remove_listener("request", handle_request)
     page.remove_listener("response", handle_response)
 
     if not found_streams:
@@ -308,9 +360,9 @@ def build_m3u(streams, url_map):
         param_str = f"|User-Agent={ua_enc}&Referer={ref_enc}&Origin={origin_enc}"
 
         lines.append(f'#EXTINF:-1 tvg-id="{tvg_id}" tvg-logo="{logo}" group-title="{final_group}",{s["name"]}')
-        # append the single URL with the pipe-encoded header params (Kodi-style)
         lines.append(f'{url}{param_str}')
     return "\n".join(lines)
+
 
 async def main():
     print("🚀 Starting PPV Stream Fetcher")
@@ -473,6 +525,7 @@ async def main():
     with open("PPVLand_vlc.m3u8", "w", encoding="utf-8") as f:
         f.write("\n".join(vlc_lines))
     print(f"✅ Done! VLC-compatible playlist saved as PPVLand_vlc.m3u8 at {datetime.utcnow().isoformat()} UTC")
+
 
 if __name__ == "__main__":
     asyncio.run(main())
