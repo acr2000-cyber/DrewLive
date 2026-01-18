@@ -95,6 +95,10 @@ COLLEGE_TEAMS = {
     "texas a&m aggies", "kentucky wildcats", "missouri tigers", "vanderbilt commodores",
     "houston cougars", "utah utes", "byu cougars", "boise state broncos", "san diego state aztecs",
     "cincinnati bearcats", "memphis tigers", "ucf knights", "south florida bulls", "smu mustangs",
+    "tulsa golden hurricane", "tulane green wave", "navy midshipmen", "army black knights",
+    "arizona state sun devils", "texas tech red raiders", "florida atlantic owls"
+}
+
     async def grab_m3u8_from_iframe(page, iframe_url):
     found_streams = set()
     
