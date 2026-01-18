@@ -95,12 +95,7 @@ COLLEGE_TEAMS = {
     "texas a&m aggies", "kentucky wildcats", "missouri tigers", "vanderbilt commodores",
     "houston cougars", "utah utes", "byu cougars", "boise state broncos", "san diego state aztecs",
     "cincinnati bearcats", "memphis tigers", "ucf knights", "south florida bulls", "smu mustangs",
-    "tulsa golden hurricane", "tulane green wave", "navy midshipmen", "army black knights",
-    "arizona state sun devils", "texas tech red raiders", "florida atlantic owls"
-}
-
-
-async def grab_m3u8_from_iframe(page, iframe_url):
+    async def grab_m3u8_from_iframe(page, iframe_url):
     found_streams = set()
     
     def handle_request(request):
@@ -146,7 +141,8 @@ async def grab_m3u8_from_iframe(page, iframe_url):
     # Wait for initial content to load
     await asyncio.sleep(5)
     
-    # Check for nested iframes
+    # Check for nested iframes and navigate to them
+    nested_iframe_url = None
     try:
         iframes = await page.locator('iframe').all()
         if iframes:
@@ -156,10 +152,31 @@ async def grab_m3u8_from_iframe(page, iframe_url):
                     src = await iframe.get_attribute('src')
                     if src:
                         print(f"  → Nested iframe {i+1}: {src}")
-                except:
-                    pass
+                        # Get the first valid nested iframe URL
+                        if not nested_iframe_url and src.startswith('http'):
+                            nested_iframe_url = src
+                        elif not nested_iframe_url and src.startswith('//'):
+                            nested_iframe_url = 'https:' + src
+                        elif not nested_iframe_url and src.startswith('/'):
+                            # Relative URL
+                            base = '/'.join(iframe_url.split('/')[:3])
+                            nested_iframe_url = base + src
+                except Exception as e:
+                    print(f"  ⚠️ Error reading iframe {i+1}: {e}")
     except Exception as e:
         print(f"⚠️ Could not check for nested iframes: {e}")
+    
+    # If nested iframe found, navigate to it
+    if nested_iframe_url:
+        print(f"🔄 Navigating to nested iframe: {nested_iframe_url}")
+        try:
+            await page.goto(nested_iframe_url, timeout=120000, wait_until="domcontentloaded")
+            print("✅ Nested iframe loaded")
+            await page.wait_for_load_state("networkidle", timeout=60000)
+            print("✅ Nested iframe network idle")
+            await asyncio.sleep(5)
+        except Exception as e:
+            print(f"⚠️ Failed to load nested iframe: {e}")
     
     # Debug: Check page content
     try:
@@ -176,9 +193,9 @@ async def grab_m3u8_from_iframe(page, iframe_url):
         ("body click", lambda: page.click("body", timeout=5000)),
         ("video element", lambda: page.click("video", timeout=5000)),
         ("play button", lambda: page.click("button.play, .vjs-big-play-button, [aria-label*='Play']", timeout=5000)),
-        ("iframe click", lambda: page.click("iframe", timeout=5000)),
         ("center hover", lambda: page.mouse.move(960, 540)),
         ("center click", lambda: page.mouse.click(960, 540)),
+        ("space key", lambda: page.keyboard.press("Space")),
     ]
     
     for name, action in interactions:
