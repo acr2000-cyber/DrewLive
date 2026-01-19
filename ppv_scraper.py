@@ -101,6 +101,7 @@ COLLEGE_TEAMS = {
 
 
 async def grab_m3u8_from_iframe(page, iframe_url):
+    """Enhanced stream detection with better iframe and player handling"""
     found_streams = set()
     
     def handle_request(request):
@@ -113,142 +114,247 @@ async def grab_m3u8_from_iframe(page, iframe_url):
         url = response.url
         content_type = response.headers.get('content-type', '').lower()
         
-        # Check for M3U8 by URL or content-type
         if ".m3u8" in url or "mpegurl" in content_type or "application/vnd.apple.mpegurl" in content_type:
             print(f"✅ Found M3U8 Stream: {url}")
             found_streams.add(url)
-        # Also log .ts segments (indicates stream is playing)
         elif ".ts" in url and "segment" in url.lower():
             print(f"🎬 Detected .ts segment (stream active): {url[:100]}...")
 
     page.on("request", handle_request)
     page.on("response", handle_response)
+    
     print(f"🌐 Navigating to iframe: {iframe_url}")
     
     try:
-        # Try loading with domcontentloaded first
-        await page.goto(iframe_url, timeout=120000, wait_until="domcontentloaded")
+        # Navigate with longer timeout
+        await page.goto(iframe_url, wait_until="domcontentloaded", timeout=30000)
         print("✅ Page loaded (domcontentloaded)")
-        await page.wait_for_load_state("networkidle", timeout=60000)
-        print("✅ Network idle detected")
-    except Exception as e:
-        print(f"❌ Failed to load iframe page: {e}")
+        
+        # Wait for network idle with timeout
         try:
-            # Try alternative loading method
-            await page.wait_for_load_state("load", timeout=60000)
-            print("✅ Page loaded (load state)")
+            await page.wait_for_load_state("networkidle", timeout=15000)
+            print("✅ Network idle detected")
+        except:
+            print("⚠️ Network idle timeout - continuing anyway")
+        
+        # Check for nested iframes first
+        await asyncio.sleep(2)
+        frames = page.frames
+        print(f"📊 Found {len(frames)} total frames")
+        
+        # Log all frame URLs for debugging
+        for i, frame in enumerate(frames):
+            frame_url = frame.url[:100] if frame.url else "about:blank"
+            print(f"  Frame {i}: {frame_url}")
+        
+        # Try to find the actual player frame
+        player_frame = None
+        for frame in frames:
+            frame_url = frame.url.lower()
+            if any(keyword in frame_url for keyword in ['player', 'embed', 'stream', 'video']):
+                if frame_url != iframe_url.lower():
+                    print(f"🎯 Found potential player frame: {frame.url}")
+                    player_frame = frame
+                    break
+        
+        # Use player frame if found, otherwise use main page
+        target = player_frame if player_frame else page
+        
+        # Scroll to trigger lazy loading
+        try:
+            await target.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            await asyncio.sleep(1)
+            await target.evaluate("window.scrollTo(0, 0)")
+            print("✅ Scrolled page to trigger lazy loading")
         except:
             pass
+        
+        # Check for player-related content in HTML
+        try:
+            html_content = await target.content()
+            player_indicators = ['video', 'player', 'stream', 'hls', 'm3u8', 'jwplayer', 'videojs']
+            found_indicators = [ind for ind in player_indicators if ind in html_content.lower()]
+            if found_indicators:
+                print(f"✅ Player-related content detected: {', '.join(found_indicators)}")
+        except:
+            pass
+        
+        # Enhanced player detection with multiple selectors
+        player_selectors = [
+            "video",
+            "video[src]",
+            "video source",
+            ".video-js",
+            "#player video",
+            ".plyr video",
+            "[id*='video']",
+            "[class*='video']",
+            "iframe[src*='player']",
+            ".jwplayer video",
+        ]
+        
+        video_element = None
+        found_selector = None
+        
+        for selector in player_selectors:
+            try:
+                await target.wait_for_selector(selector, timeout=5000, state="attached")
+                video_element = await target.query_selector(selector)
+                if video_element:
+                    found_selector = selector
+                    print(f"✅ Found video element: {selector}")
+                    break
+            except:
+                continue
+        
+        if not video_element:
+            print("⚠️ No video element found with any selector")
+        
+        # Try multiple interaction methods
+        interactions_attempted = []
+        
+        # 1. Click body to focus
+        try:
+            await target.click("body", timeout=3000)
+            interactions_attempted.append("body click")
+            print("✅ Triggered: body click")
+            await asyncio.sleep(1)
+        except Exception as e:
+            print(f"⚠️ Body click failed: {e}")
+        
+        # 2. Try to click video element directly
+        if video_element:
+            try:
+                await video_element.click(timeout=5000)
+                interactions_attempted.append("video click")
+                print("✅ Triggered: video element click")
+                await asyncio.sleep(1)
+            except Exception as e:
+                print(f"⚠️ Video element click failed: {e}")
+        
+        # 3. Try common play button selectors
+        play_button_selectors = [
+            "button.play",
+            ".vjs-big-play-button",
+            "[aria-label*='Play']",
+            "[aria-label*='play']",
+            ".plyr__control--overlaid",
+            ".jw-display-icon-container",
+            "[class*='play-button']",
+            "[id*='play-button']",
+            "button[title*='Play']",
+            ".play-button",
+        ]
+        
+        for selector in play_button_selectors:
+            try:
+                play_button = await target.query_selector(selector)
+                if play_button:
+                    await play_button.click(timeout=3000)
+                    interactions_attempted.append(f"play button ({selector})")
+                    print(f"✅ Triggered: play button ({selector})")
+                    await asyncio.sleep(1)
+                    break
+            except:
+                continue
+        else:
+            print("⚠️ Could not find/click any play button")
+        
+        # 4. Try JavaScript play() method
+        if video_element:
+            try:
+                await target.evaluate("""
+                    () => {
+                        const videos = document.querySelectorAll('video');
+                        videos.forEach(v => {
+                            v.muted = false;
+                            v.play().catch(e => console.log('Play failed:', e));
+                        });
+                    }
+                """)
+                interactions_attempted.append("JS play()")
+                print("✅ Triggered: JavaScript play() method")
+                await asyncio.sleep(1)
+            except Exception as e:
+                print(f"⚠️ JavaScript play() failed: {e}")
+        
+        # 5. Try keyboard space to play
+        try:
+            await target.keyboard.press("Space")
+            interactions_attempted.append("keyboard space")
+            print("✅ Triggered: keyboard space")
+            await asyncio.sleep(1)
+        except Exception as e:
+            print(f"⚠️ Keyboard space failed: {e}")
+        
+        # 6. Try clicking center of viewport
+        try:
+            viewport = page.viewport_size
+            if viewport:
+                center_x = viewport['width'] // 2
+                center_y = viewport['height'] // 2
+                await target.mouse.click(center_x, center_y)
+                interactions_attempted.append("center click")
+                print(f"✅ Triggered: center click ({center_x}, {center_y})")
+                await asyncio.sleep(1)
+        except Exception as e:
+            print(f"⚠️ Center click failed: {e}")
+        
+        # Wait for stream to initialize
+        await asyncio.sleep(3)
+        
+        # Check if video is playing
+        try:
+            is_playing = await target.evaluate("""
+                () => {
+                    const video = document.querySelector('video');
+                    return video && !video.paused && !video.ended && video.readyState > 2;
+                }
+            """)
+            if is_playing:
+                print("✅ Video is playing!")
+            else:
+                print("⚠️ Video element exists but may not be playing")
+        except:
+            print("⚠️ Could not verify video playback state")
+        
+        print(f"📝 Interactions attempted: {', '.join(interactions_attempted)}")
+        
+        # Extended wait for stream request
+        print("⏳ Waiting for stream to be requested (max 40s)...")
+        try:
+            await page.wait_for_event(
+                "response",
+                lambda resp: ".m3u8" in resp.url,
+                timeout=40000
+            )
+            print("✅ M3U8 stream detected. Proceeding immediately to validation.")
+        except PlaywrightTimeoutError:
+            print("⚠️ Stream request did not start within 40 seconds. Checking for streams anyway...")
+        except Exception as e:
+            print(f"❌ Failed during wait for M3U8 event: {e}")
+
+        # Final wait to capture late-loading streams
+        await asyncio.sleep(5)
+
         page.remove_listener("request", handle_request)
         page.remove_listener("response", handle_response)
-        return set()
 
-    # Wait for initial content to load
-    await asyncio.sleep(5)
-    
-    # Check for nested iframes and navigate to them
-    nested_iframe_url = None
-    try:
-        iframes = await page.locator('iframe').all()
-        if iframes:
-            print(f"📦 Found {len(iframes)} nested iframe(s)")
-            for i, iframe in enumerate(iframes):
-                try:
-                    src = await iframe.get_attribute('src')
-                    if src:
-                        print(f"  → Nested iframe {i+1}: {src}")
-                        # Get the first valid nested iframe URL
-                        if not nested_iframe_url and src.startswith('http'):
-                            nested_iframe_url = src
-                        elif not nested_iframe_url and src.startswith('//'):
-                            nested_iframe_url = 'https:' + src
-                        elif not nested_iframe_url and src.startswith('/'):
-                            # Relative URL
-                            base = '/'.join(iframe_url.split('/')[:3])
-                            nested_iframe_url = base + src
-                except Exception as e:
-                    print(f"  ⚠️ Error reading iframe {i+1}: {e}")
-    except Exception as e:
-        print(f"⚠️ Could not check for nested iframes: {e}")
-    
-    # If nested iframe found, navigate to it
-    if nested_iframe_url:
-        print(f"🔄 Navigating to nested iframe: {nested_iframe_url}")
-        try:
-            await page.goto(nested_iframe_url, timeout=120000, wait_until="domcontentloaded")
-            print("✅ Nested iframe loaded")
-            await page.wait_for_load_state("networkidle", timeout=60000)
-            print("✅ Nested iframe network idle")
-            await asyncio.sleep(5)
-        except Exception as e:
-            print(f"⚠️ Failed to load nested iframe: {e}")
-    
-    # Debug: Check page content
-    try:
-        page_content = await page.content()
-        if "player" in page_content.lower():
-            print("✅ Player-related content detected in HTML")
-        if "m3u8" in page_content.lower():
-            print("🎯 M3U8 reference found in page source!")
-    except:
-        pass
-    
-    # Try multiple interaction methods to trigger stream loading
-    interactions = [
-        ("body click", lambda: page.click("body", timeout=5000)),
-        ("video element", lambda: page.click("video", timeout=5000)),
-        ("play button", lambda: page.click("button.play, .vjs-big-play-button, [aria-label*='Play']", timeout=5000)),
-        ("center hover", lambda: page.mouse.move(960, 540)),
-        ("center click", lambda: page.mouse.click(960, 540)),
-        ("space key", lambda: page.keyboard.press("Space")),
-    ]
-    
-    for name, action in interactions:
-        try:
-            await action()
-            print(f"✅ Triggered: {name}")
-            await asyncio.sleep(3)  # Wait after each interaction
-            if found_streams:  # Exit early if stream found
-                print(f"🎉 Stream found after {name}, skipping remaining interactions")
-                break
-        except Exception as e:
-            print(f"⚠️ Could not trigger {name}: {e}")
+        if not found_streams:
+            print(f"❌ No M3U8 URLs were captured for {iframe_url}")
+            return set()
 
-    # Extended wait for stream request (increased from 25s to 40s)
-    print("⏳ Waiting for stream to be requested (max 40s)...")
-    try:
-        await page.wait_for_event(
-            "response",
-            lambda resp: ".m3u8" in resp.url,
-            timeout=40000  # Increased timeout
-        )
-        print("✅ M3U8 stream detected. Proceeding immediately to validation.")
-    except PlaywrightTimeoutError:
-        print("⚠️ Stream request did not start within 40 seconds. Checking for streams anyway...")
-    except Exception as e:
-        print(f"❌ Failed during wait for M3U8 event: {e}")
-
-    # Final wait to capture late-loading streams
-    await asyncio.sleep(5)
-
-    page.remove_listener("request", handle_request)
-    page.remove_listener("response", handle_response)
-
-    if not found_streams:
-        print(f"❌ No M3U8 URLs were captured for {iframe_url}")
-        return set()
-
-    valid_urls = set()
-    tasks = [check_m3u8_url(url, iframe_url) for url in found_streams]
-    results = await asyncio.gather(*tasks)
-    
-    for url, is_valid in zip(found_streams, results):
-        if is_valid:
-            valid_urls.add(url)
-        else:
-            print(f"🗑️ Discarding invalid or unreachable URL: {url}")
-            
-    return valid_urls
+        valid_urls = set()
+        tasks = [check_m3u8_url(url, iframe_url) for url in found_streams]
+        results = await asyncio.gather(*tasks)
+        
+        for url, is_valid in zip(found_streams, results):
+            if is_valid:
+                valid_urls.add(url)
+            else:
+                print(f"🗑️ Discarding invalid or unreachable URL: {url}")
+                
+        return valid_urls
 
 async def check_m3u8_url(url, referer):
     """Checks the M3U8 URL using the correct referer for validation."""
