@@ -355,6 +355,10 @@ async def grab_m3u8_from_iframe(page, iframe_url):
                 print(f"🗑️ Discarding invalid or unreachable URL: {url}")
                 
         return valid_urls
+    except Exception as e:
+        print(f"❌ Error in grab_m3u8_from_iframe: {e}")
+        return set()
+
 
 async def check_m3u8_url(url, referer):
     """Checks the M3U8 URL using the correct referer for validation."""
