@@ -334,10 +334,33 @@ async def grab_m3u8_from_iframe(page, iframe_url):
         except Exception as e:
             print(f"❌ Failed during wait for M3U8 event: {e}")
 
-        # Final wait to capture late-loading streams
-        await asyncio.sleep(5)async def grab_m3u8_from_iframe(page, iframe_url):
-    """Enhanced stream detection with better iframe and player handling"""
-    found_streams = set()
+               # Final wait to capture late-loading streams
+        await asyncio.sleep(5)
+
+        page.remove_listener("request", handle_request)
+        page.remove_listener("response", handle_response)
+
+        if not found_streams:
+            print(f"❌ No M3U8 URLs were captured for {iframe_url}")
+            return set()
+
+        valid_urls = set()
+        tasks = [check_m3u8_url(url, iframe_url) for url in found_streams]
+        results = await asyncio.gather(*tasks)
+        
+        for url, is_valid in zip(found_streams, results):
+            if is_valid:
+                valid_urls.add(url)
+            else:
+                print(f"🗑️ Discarding invalid or unreachable URL: {url}")
+                
+        return valid_urls
+    except Exception as e:
+        print(f"❌ Error in grab_m3u8_from_iframe: {e}")
+        return set()
+
+
+async def check_m3u8_url(url, referer):
     
     def handle_request(request):
         url = request.url
