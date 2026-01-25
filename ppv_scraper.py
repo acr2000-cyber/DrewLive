@@ -108,7 +108,7 @@ def get_all_frames(frame):
     return all_frames
 
 async def grab_m3u8_from_iframe(page, iframe_url):
-    """Enhanced stream detection with better iframe and player handling"""
+    """Enhanced stream detection with dynamic iframe loading support"""
     found_streams = set()
     
     def handle_request(request):
@@ -156,18 +156,27 @@ async def grab_m3u8_from_iframe(page, iframe_url):
         # Check for iframe elements in DOM
         iframe_elements = await page.query_selector_all('iframe')
         print(f"🔍 Found {len(iframe_elements)} iframe elements in DOM")
-        for i, iframe in enumerate(iframe_elements):
-            src = await iframe.get_attribute('src')
-            print(f"  Iframe {i} src: {src}")
         
-        # Check if there's a nested iframe we should navigate to
+        # NEW: Wait for iframe src to be populated dynamically
         nested_iframe_url = None
-        for iframe in iframe_elements:
-            src = await iframe.get_attribute('src')
-            if src and src.startswith('http') and src != iframe_url:
-                nested_iframe_url = src
-                print(f"🔄 Found nested iframe: {nested_iframe_url}")
-                break
+        if iframe_elements:
+            print("⏳ Waiting for iframe src to be populated...")
+            for attempt in range(10):  # Try for 10 seconds
+                for i, iframe in enumerate(iframe_elements):
+                    src = await iframe.get_attribute('src')
+                    if src:
+                        print(f"  Iframe {i} src: {src}")
+                        if src.startswith('http') and src != iframe_url:
+                            nested_iframe_url = src
+                            print(f"🔄 Found nested iframe: {nested_iframe_url}")
+                            break
+                    else:
+                        print(f"  Iframe {i} src: None (waiting...)")
+                
+                if nested_iframe_url:
+                    break
+                
+                await asyncio.sleep(1)
         
         if nested_iframe_url:
             print(f"🌐 Navigating to nested iframe: {nested_iframe_url}")
@@ -182,6 +191,11 @@ async def grab_m3u8_from_iframe(page, iframe_url):
             # Re-check frames after navigation
             all_frames = get_all_frames(page.main_frame)
             print(f"📊 Found {len(all_frames)} frames in nested iframe")
+            
+            # Wait a bit more for the player to initialize
+            await asyncio.sleep(3)
+        else:
+            print("⚠️ No nested iframe with valid src found")
         
         # Scroll to trigger lazy loading
         try:
