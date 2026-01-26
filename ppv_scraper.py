@@ -405,7 +405,7 @@ def get_all_frames(frame):
     return all_frames
 
 async def grab_m3u8_from_iframe(page, iframe_url):
-    """Enhanced stream detection with nested iframe support"""
+    """Enhanced stream detection with better fallbacks"""
     found_streams = set()
     
     def handle_request(request):
@@ -447,17 +447,12 @@ async def grab_m3u8_from_iframe(page, iframe_url):
         # Get all frames including nested ones
         all_frames = get_all_frames(page.main_frame)
         print(f"📊 Found {len(all_frames)} total frames (including nested)")
-        for i, frame in enumerate(all_frames):
-            print(f"  Frame {i}: {frame.url}")
         
         # Check for iframe elements in DOM
         iframe_elements = await page.query_selector_all('iframe')
         print(f"🔍 Found {len(iframe_elements)} iframe elements in DOM")
-        for i, iframe in enumerate(iframe_elements):
-            src = await iframe.get_attribute('src')
-            print(f"  Iframe {i} src: {src}")
         
-        # Check if there's a nested iframe we should navigate to
+        # Try to find valid iframe src
         nested_iframe_url = None
         for iframe in iframe_elements:
             src = await iframe.get_attribute('src')
@@ -678,9 +673,7 @@ async def grab_m3u8_from_iframe(page, iframe_url):
         return valid_urls
     except Exception as e:
         print(f"❌ Error in grab_m3u8_from_iframe: {e}")
-        return set()
-
-async def check_m3u8_url(url, referer):
+        return set()async def check_m3u8_url(url, referer):
     """Checks the M3U8 URL using the correct referer for validation."""
     
     if "gg.poocloud.in" in url:
