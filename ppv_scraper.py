@@ -18,20 +18,18 @@ CUSTOM_HEADERS = [
 DEFAULT_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:143.0) Gecko/20100101 Firefox/143.0"
 
 ALLOWED_CATEGORIES = {
-    "24/7 Streams", "Wrestling", "Football", "Basketball", "Baseball",
-    "Combat Sports", "American Football", "Darts", "Motorsports", "Ice Hockey",
+    "24/7 Streams", "Wrestling", "Basketball", "Combat Sports",
+    "Darts", "Motorsports", "Ice Hockey",
     "Miscellaneous"
 }
 
 CATEGORY_LOGOS = {
     "24/7 Streams": "http://drewlive24.duckdns.org:9000/Logos/247.png",
     "Wrestling": "http://drewlive24.duckdns.org:9000/Logos/Wrestling.png",
-    "Football": "http://drewlive24.duckdns.org:9000/Logos/Football.png",
     "Basketball": "http://drewlive24.duckdns.org:9000/Logos/Basketball.png",
-    "Baseball": "http://drewlive24.duckdns.org:9000/Logos/Baseball.png",
-    "American Football": "http://drewlive24.duckdns.org:9000/Logos/NFL3.png",
     "Combat Sports": "http://drewlive24.duckdns.org:9000/Logos/CombatSports2.png",
-    "Live Now": "http://drewlive24.duckdns.org:9000/Logos/DrewLiveSports.png",
+    "Darts": "http://drewlive24.duckdns.org:9000/Logos/Darts.png",
+    "Motorsports": "http://drewlive24.duckdns.org:9000/Logos/Racing.Dummy.us.png",
     "Ice Hockey": "http://drewlive24.duckdns.org:9000/Logos/Hockey.png",
     "Miscellaneous": "http://drewlive24.duckdns.org:9000/Logos/DrewLiveSports.png"
 }
@@ -39,14 +37,10 @@ CATEGORY_LOGOS = {
 CATEGORY_TVG_IDS = {
     "24/7 Streams": "24.7.Dummy.us",
     "Wrestling": "PPV.EVENTS.Dummy.us",
-    "Football": "Soccer.Dummy.us",
     "Basketball": "Basketball.Dummy.us",
-    "Baseball": "MLB.Baseball.Dummy.us",
-    "American Football": "NFL.Dummy.us",
     "Combat Sports": "PPV.EVENTS.Dummy.us",
     "Darts": "Darts.Dummy.us",
     "Motorsports": "Racing.Dummy.us",
-    "Live Now": "24.7.Dummy.us",
     "Ice Hockey": "NHL.Hockey.Dummy.us",
     "Miscellaneous": "24.7.Dummy.us"
 }
@@ -54,52 +48,16 @@ CATEGORY_TVG_IDS = {
 GROUP_RENAME_MAP = {
     "24/7 Streams": "PPVLand - Live Channels 24/7",
     "Wrestling": "PPVLand - Wrestling Events",
-    "Football": "PPVLand - Global Football Streams",
     "Basketball": "PPVLand - Basketball Hub",
-    "Baseball": "PPVLand - MLB",
-    "American Football": "PPVLand - NFL Action",
     "Combat Sports": "PPVLand - Combat Sports",
     "Darts": "PPVLand - Darts",
     "Motorsports": "PPVLand - Racing Action",
-    "Live Now": "PPVLand - Live Now",
     "Ice Hockey": "PPVLand - NHL Action",
     "Miscellaneous": "PPVLand - Random Events"
 }
 
-NFL_TEAMS = {
-    "arizona cardinals", "atlanta falcons", "baltimore ravens", "buffalo bills",
-    "carolina panthers", "chicago bears", "cincinnati bengals", "cleveland browns",
-    "dallas cowboys", "denver broncos", "detroit lions", "green bay packers",
-    "houston texans", "indianapolis colts", "jacksonville jaguars", "kansas city chiefs",
-    "las vegas raiders", "los angeles chargers", "los angeles rams", "miami dolphins",
-    "minnesota vikings", "new england patriots", "new orleans saints", "new york giants",
-    "new york jets", "philadelphia eagles", "pittsburgh steelers", "san francisco 49ers",
-    "seattle seahawks", "tampa bay buccaneers", "tennessee titans", "washington commanders"
-}
+# NFL_TEAMS and COLLEGE_TEAMS are removed as Football is not allowed
 
-COLLEGE_TEAMS = {
-    "alabama crimson tide", "auburn tigers", "arkansas razorbacks", "georgia bulldogs",
-    "florida gators", "lsu tigers", "ole miss rebels", "mississippi state bulldogs",
-    "tennessee volunteers", "texas longhorns", "oklahoma sooners", "oklahoma state cowboys",
-    "baylor bears", "tcu horned frogs", "kansas jayhawks", "kansas state wildcats",
-    "iowa state cyclones", "iowa hawkeyes", "michigan wolverines", "ohio state buckeyes",
-    "penn state nittany lions", "michigan state spartans", "wisconsin badgers",
-    "minnesota golden gophers", "illinois fighting illini", "northwestern wildcats",
-    "indiana hoosiers", "notre dame fighting irish", "usc trojans", "ucla bruins",
-    "oregon ducks", "oregon state beavers", "washington huskies", "washington state cougars",
-    "arizona wildcats", "stanford cardinal", "california golden bears", "colorado buffaloes",
-    "florida state seminoles", "miami hurricanes", "clemson tigers", "north carolina tar heels",
-    "duke blue devils", "nc state wolfpack", "wake forest demon deacons", "syracuse orange",
-    "virginia cavaliers", "virginia tech hokies", "louisville cardinals", "pittsburgh panthers",
-    "maryland terrapins", "rutgers scarlet knights", "nebraska cornhuskers", "purdue boilermakers",
-    "texas a&m aggies", "kentucky wildcats", "missouri tigers", "vanderbilt commodores",
-    "houston cougars", "utah utes", "byu cougars", "boise state broncos", "san diego state aztecs",
-    "cincinnati bearcats", "memphis tigers", "ucf knights", "south florida bulls", "smu mustangs",
-    "tulsa golden hurricane", "tulane green wave", "navy midshipmen", "army black knights",
-    "arizona state sun devils", "texas tech red raiders", "florida atlantic owls"
-}
-
-# Add this function to the top of your file
 def get_all_frames(frame):
     """Recursively get all frames including nested ones"""
     all_frames = [frame]
@@ -175,7 +133,7 @@ async def grab_m3u8_from_iframe(page, iframe_url):
             src = await iframe.get_attribute('src')
             print(f"  Iframe {i} src: {src}")
         
-        # Check if there's a nested iframe we should navigate to
+        # Check for nested iframe we should navigate to
         nested_iframe_url = None
         for iframe in iframe_elements:
             src = await iframe.get_attribute('src')
