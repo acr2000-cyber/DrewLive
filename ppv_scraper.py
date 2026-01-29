@@ -627,68 +627,6 @@ async def main():
     with open("PPVLand.m3u8", "w", encoding="utf-8") as f:
         f.write(playlist)
     print(f"✅ Done! Playlist saved as PPVLand.m3u8 at {datetime.utcnow().isoformat()} UTC")
-    
-    # NEW: Write VLC-compatible file
-    print("\n💾 Writing VLC-compatible playlist to PPVLand_vlc.m3u8 ...")
-    vlc_lines = ['#EXTM3U']
-    seen_names = set()
-    for s in streams:
-        name_lower = s["name"].strip().lower()
-        if name_lower in seen_names:
-            continue
-        seen_names.add(name_lower)
-
-        unique_key = f"{s['name']}::{s['category']}::{s['iframe']}"
-        urls = url_map.get(unique_key, [])
-        if not urls:
-            print(f"⚠️ No working URLs for {s['name']}")
-            continue
-
-        orig_category = s.get("category") or "Misc"
-        final_group = GROUP_RENAME_MAP.get(orig_category, f"PPVLand - {orig_category}")
-        logo = s.get("poster") or CATEGORY_LOGOS.get(orig_category, "http://drewlive24.duckdns.org:9000/Logos/Default.png")
-        tvg_id = CATEGORY_TVG_IDS.get(orig_category, "Misc.Dummy.us")
-
-        if orig_category == "American Football":
-            matched_team = None
-            for team in NFL_TEAMS:
-                if team in name_lower:
-                    tvg_id = "NFL.Dummy.us"
-                    final_group = "PPVLand - NFL Action"
-                    matched_team = team
-                    break
-            if not matched_team:
-                for team in COLLEGE_TEAMS:
-                    if team in name_lower:
-                        tvg_id = "NCAA.Football.Dummy.us"
-                        final_group = "PPVLand - College Football"
-                        matched_team = team
-                        break
-
-        # Pick the first available URL
-        url = next(iter(urls))
-
-        # Build the VLC-compatible header parameters
-        try:
-            referer = s.get("iframe") or ""
-            origin = "https://" + referer.split('/') if referer else "https://ppv.to"
-        except Exception:
-            origin = "https://ppv.to"
-
-        ua_enc = _encode_param(DEFAULT_UA)
-        ref_enc = _encode_param(referer)
-        origin_enc = _encode_param(origin)
-
-        # Create VLC-compatible header parameters
-        vlc_params = f"|User-Agent={ua_enc}&Referer={ref_enc}&Origin={origin_enc}"
-
-        vlc_lines.append(f'#EXTINF:-1 tvg-id="{tvg_id}" tvg-logo="{logo}" group-title="{final_group}",{s["name"]}')
-        vlc_lines.append(f'{url}{vlc_params}')
-    
-    with open("PPVLand_vlc.m3u8", "w", encoding="utf-8") as f:
-        f.write("\n".join(vlc_lines))
-    print(f"✅ Done! VLC-compatible playlist saved as PPVLand_vlc.m3u8 at {datetime.utcnow().isoformat()} UTC")
-
 
 if __name__ == "__main__":
     asyncio.run(main())
