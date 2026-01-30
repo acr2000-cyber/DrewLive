@@ -1,590 +1,379 @@
-import json
 import asyncio
-from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError
-import aiohttp
-from datetime import datetime
+import time
 import re
-import urllib.parse
+from typing import Optional, List, Dict, Any
 
-API_URL = "https://ppv.to/api/streams"
+# ============================================================================
+# ENHANCED IFRAME DETECTION AND HANDLING
+# ============================================================================
 
-CUSTOM_HEADERS = [
-    '#EXTVLCOPT:http-origin=https://ppv.to',
-    '#EXTVLCOPT:http-referrer=https://ppv.to/',
-    '#EXTVLCOPT:http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:143.0) Gecko/20100101 Firefox/143.0'
-]
-
-# Default User-Agent string used when appending params to the URL
-DEFAULT_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:143.0) Gecko/20100101 Firefox/143.0"
-
-ALLOWED_CATEGORIES = {
-    "24/7 Streams", "Wrestling", "Basketball", "Combat Sports",
-    "Darts", "Motorsports", "Ice Hockey",
-    "Miscellaneous"
-}
-
-CATEGORY_LOGOS = {
-    "24/7 Streams": "http://drewlive24.duckdns.org:9000/Logos/247.png",
-    "Wrestling": "http://drewlive24.duckdns.org:9000/Logos/Wrestling.png",
-    "Basketball": "http://drewlive24.duckdns.org:9000/Logos/Basketball.png",
-    "Combat Sports": "http://drewlive24.duckdns.org:9000/Logos/CombatSports2.png",
-    "Darts": "http://drewlive24.duckdns.org:9000/Logos/Darts.png",
-    "Motorsports": "http://drewlive24.duckdns.org:9000/Logos/Racing.Dummy.us.png",
-    "Ice Hockey": "http://drewlive24.duckdns.org:9000/Logos/Hockey.png",
-    "Miscellaneous": "http://drewlive24.duckdns.org:9000/Logos/DrewLiveSports.png"
-}
-
-CATEGORY_TVG_IDS = {
-    "24/7 Streams": "24.7.Dummy.us",
-    "Wrestling": "PPV.EVENTS.Dummy.us",
-    "Basketball": "Basketball.Dummy.us",
-    "Combat Sports": "PPV.EVENTS.Dummy.us",
-    "Darts": "Darts.Dummy.us",
-    "Motorsports": "Racing.Dummy.us",
-    "Ice Hockey": "NHL.Hockey.Dummy.us",
-    "Miscellaneous": "24.7.Dummy.us"
-}
-
-GROUP_RENAME_MAP = {
-    "24/7 Streams": "PPVLand - Live Channels 24/7",
-    "Wrestling": "PPVLand - Wrestling Events",
-    "Basketball": "PPVLand - Basketball Hub",
-    "Combat Sports": "PPVLand - Combat Sports",
-    "Darts": "PPVLand - Darts",
-    "Motorsports": "PPVLand - Racing Action",
-    "Ice Hockey": "PPVLand - NHL Action",
-    "Miscellaneous": "PPVLand - Random Events"
-}
-
-# NFL_TEAMS and COLLEGE_TEAMS are removed as Football is not allowed
-
-def get_all_frames(frame):
-    """Recursively get all frames including nested ones"""
-    all_frames = [frame]
-    for child in frame.child_frames:
-        all_frames.extend(get_all_frames(child))
-    return all_frames
-
-async def wait_for_video_element(target, max_attempts=20, delay=0.5):
-    """Poll for video element to appear after interactions"""
-    for attempt in range(max_attempts):
+async def check_for_blocking_elements(page) -> List[str]:
+    """Check for anti-bot overlays, captchas, or adblock detectors"""
+    blocking_selectors = [
+        'div[class*="overlay"]',
+        'div[class*="adblock"]',
+        'div[class*="ad-block"]',
+        'div[id*="captcha"]',
+        'iframe[src*="captcha"]',
+        'button:has-text("I\'m not a robot")',
+        'div:has-text("Please disable")',
+        'div:has-text("AdBlock")',
+        'div[class*="modal"]',
+        'div[class*="popup"]'
+    ]
+    
+    found_blockers = []
+    for selector in blocking_selectors:
         try:
-            video = await target.query_selector('video')
-            if video:
-                print(f"✅ Video element appeared after {attempt * delay:.1f}s")
-                return video
-        except:
+            element = await page.query_selector(selector)
+            if element:
+                is_visible = await element.is_visible()
+                if is_visible:
+                    found_blockers.append(selector)
+                    print(f"⚠️ Blocking element found (visible): {selector}")
+        except Exception:
             pass
-        await asyncio.sleep(delay)
     
-    print(f"⚠️ Video element did not appear after {max_attempts * delay:.1f}s")
-    return None
+    return found_blockers
 
-async def grab_m3u8_from_iframe(page, iframe_url):
-    """Enhanced stream detection with dynamic iframe loading support"""
-    found_streams = set()
-    
-    def handle_request(request):
-        url = request.url
-        if ".m3u8" in url:
-            print(f"🎯 M3U8 in REQUEST: {url}")
-            found_streams.add(url)
-    
-    def handle_response(response):
-        url = response.url
-        content_type = response.headers.get('content-type', '').lower()
-        
-        if ".m3u8" in url or "mpegurl" in content_type or "application/vnd.apple.mpegurl" in content_type:
-            print(f"✅ Found M3U8 Stream: {url}")
-            found_streams.add(url)
-        elif ".ts" in url and "segment" in url.lower():
-            print(f"🎬 Detected .ts segment (stream active): {url[:100]}...")
 
-    page.on("request", handle_request)
-    page.on("response", handle_response)
-    
-    print(f"🌐 Navigating to iframe: {iframe_url}")
-    
+async def get_iframe_info_via_js(page) -> List[Dict[str, Any]]:
+    """Get detailed iframe information via JavaScript"""
     try:
-        # Navigate with longer timeout
-        await page.goto(iframe_url, wait_until="domcontentloaded", timeout=30000)
-        print("✅ Page loaded (domcontentloaded)")
+        js_info = await page.evaluate("""() => {
+            const iframes = document.querySelectorAll('iframe');
+            return Array.from(iframes).map((iframe, index) => ({
+                index: index,
+                src: iframe.src || null,
+                dataSrc: iframe.getAttribute('data-src') || null,
+                id: iframe.id || null,
+                className: iframe.className || null,
+                width: iframe.width || iframe.offsetWidth,
+                height: iframe.height || iframe.offsetHeight,
+                hasParent: !!iframe.parentElement,
+                parentTag: iframe.parentElement?.tagName || null,
+                isVisible: iframe.offsetParent !== null,
+                style: iframe.getAttribute('style') || null
+            }));
+        }""")
+        return js_info
+    except Exception as e:
+        print(f"⚠️ Failed to get iframe info via JS: {e}")
+        return []
+
+
+async def extract_iframe_src_from_html(page) -> Optional[str]:
+    """Fallback: Extract iframe src from raw HTML"""
+    try:
+        content = await page.content()
         
-        # Wait for network idle with timeout
-        try:
-            await page.wait_for_load_state("networkidle", timeout=15000)
-            print("✅ Network idle detected")
-        except:
-            print("⚠️ Network idle timeout - continuing anyway")
-        
-        # Wait for iframes to load
-        await asyncio.sleep(3)
-        
-        # Get all frames including nested ones
-        all_frames = get_all_frames(page.main_frame)
-        print(f"📊 Found {len(all_frames)} total frames (including nested)")
-        for i, frame in enumerate(all_frames):
-            print(f"  Frame {i}: {frame.url}")
-        
-        # Check for iframe elements in DOM
-        iframe_elements = await page.query_selector_all('iframe')
-        print(f"🔍 Found {len(iframe_elements)} iframe elements in DOM")
-        for i, iframe in enumerate(iframe_elements):
-            src = await iframe.get_attribute('src')
-            print(f"  Iframe {i} src: {src}")
-        
-        # Check for nested iframe we should navigate to
-        nested_iframe_url = None
-        for iframe in iframe_elements:
-            src = await iframe.get_attribute('src')
-            if src and src.startswith('http') and src != iframe_url:
-                nested_iframe_url = src
-                print(f"🔄 Found nested iframe: {nested_iframe_url}")
-                break
-        
-        if nested_iframe_url:
-            print(f"🌐 Navigating to nested iframe: {nested_iframe_url}")
-            await page.goto(nested_iframe_url, wait_until="domcontentloaded", timeout=30000)
-            
-            try:
-                await page.wait_for_load_state("networkidle", timeout=15000)
-                print("✅ Network idle detected (nested iframe)")
-            except:
-                print("⚠️ Network idle timeout (nested iframe)")
-            
-            # Re-check frames after navigation
-            all_frames = get_all_frames(page.main_frame)
-            print(f"📊 Found {len(all_frames)} frames in nested iframe")
-        
-        # Scroll to trigger lazy loading
-        try:
-            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-            await asyncio.sleep(1)
-            await page.evaluate("window.scrollTo(0, 0)")
-            print("✅ Scrolled page to trigger lazy loading")
-        except:
-            pass
-        
-        # Check for player-related content in HTML
-        try:
-            html_content = await page.content()
-            player_indicators = ['video', 'player', 'stream', 'hls', 'm3u8', 'jwplayer', 'videojs']
-            found_indicators = [ind for ind in player_indicators if ind in html_content.lower()]
-            if found_indicators:
-                print(f"✅ Player-related content detected: {', '.join(found_indicators)}")
-        except:
-            pass
-        
-        # Check for video elements in all frames
-        video_found = False
-        video_frame = None
-        player_selectors = [
-            "video", "video[src]", "video source", ".video-js", "#player video",
-            ".plyr video", "[id*='video']", "[class*='video']", "iframe[src*='player']",
-            ".jwplayer video", "#vplayer", ".vplayer", "[id*='player']", "[class*='player']"
+        # Try multiple regex patterns
+        patterns = [
+            r'<iframe[^>]+src=["\']([^"\']+)["\']',
+            r'<iframe[^>]+data-src=["\']([^"\']+)["\']',
+            r'iframe\.src\s*=\s*["\']([^"\']+)["\']',
+            r'setAttribute\(["\']src["\']\s*,\s*["\']([^"\']+)["\']'
         ]
         
-        for frame in all_frames:
-            try:
-                for selector in player_selectors:
-                    video = await frame.query_selector(selector)
-                    if video:
-                        print(f"✅ Video element found in frame with selector: {selector}")
-                        video_found = True
-                        video_frame = frame
-                        break
-                if video_found:
-                    break
-            except Exception:
-                continue
+        for pattern in patterns:
+            match = re.search(pattern, content, re.IGNORECASE)
+            if match:
+                src = match.group(1)
+                if src and src != 'about:blank':
+                    print(f"✅ Found iframe src in HTML: {src}")
+                    return src
         
-        if not video_found:
-            print("⚠️ No video element found in any frame")
-        
-        # Try interactions on the frame with video (or main page if not found)
-        target = video_frame if video_frame else page
-        interactions_attempted = []
-        
-        # 1. Try JavaScript play() method FIRST (before looking for buttons)
-        try:
-            await target.evaluate("""
-                () => {
-                    // Unmute and play all video elements
-                    const videos = document.querySelectorAll('video');
-                    videos.forEach(v => {
-                        v.muted = false;
-                        v.volume = 1.0;
-                        v.play().catch(e => console.log('Play failed:', e));
-                    });
-                    
-                    // Try common player APIs
-                    if (window.player && typeof window.player.play === 'function') {
-                        window.player.play();
-                    }
-                    if (window.jwplayer && typeof window.jwplayer === 'function') {
-                        try { window.jwplayer().play(); } catch(e) {}
-                    }
-                    if (window.videojs) {
-                        try {
-                            const players = document.querySelectorAll('.video-js');
-                            players.forEach(p => {
-                                const player = window.videojs(p.id);
-                                if (player) player.play();
-                            });
-                        } catch(e) {}
-                    }
-                }
-            """)
-            interactions_attempted.append('JS play()')
-            print("✅ Triggered: JavaScript play() method")
-            await asyncio.sleep(2)
-        except Exception as e:
-            print(f"⚠️ JavaScript play() failed: {e}")
-        
-        # 2. NOW poll for video element to appear
-        video_element = await wait_for_video_element(target, max_attempts=20, delay=0.5)
-        
-        # 3. Try play button selectors
-        play_button_selectors = [
-            "button.play", ".vjs-big-play-button", "[aria-label*='Play']",
-            "[aria-label*='play']", ".plyr__control--overlaid", ".jw-display-icon-container",
-            "[class*='play-button']", "[id*='play-button']", "button[title*='Play']",
-            ".play-button", "div.play-button", "div[class*='play']", "div[id*='play']"
-        ]
-        
-        play_button_clicked = False
-        for selector in play_button_selectors:
-            try:
-                play_button = await target.query_selector(selector)
-                if play_button:
-                    await play_button.click(timeout=3000)
-                    interactions_attempted.append(f'play button ({selector})')
-                    print(f"✅ Clicked play button: {selector}")
-                    play_button_clicked = True
-                    await asyncio.sleep(2)
-                    
-                    # Poll for video after button click
-                    if not video_element:
-                        video_element = await wait_for_video_element(target, max_attempts=10, delay=0.5)
-                    break
-            except:
-                continue
-        
-        if not play_button_clicked:
-            print("⚠️ Could not find/click any play button")
-        
-        # 4. Try keyboard space
-        try:
-            await page.keyboard.press("Space")
-            interactions_attempted.append('keyboard space')
-            print("✅ Triggered: keyboard space")
-            await asyncio.sleep(1)
-        except Exception as e:
-            print(f"⚠️ Keyboard space failed: {e}")
-        
-        # 5. Try clicking center of viewport
-        try:
-            viewport = page.viewport_size
-            if viewport:
-                center_x = viewport['width'] // 2
-                center_y = viewport['height'] // 2
-                await target.mouse.click(center_x, center_y)
-                interactions_attempted.append('center click')
-                print(f"✅ Triggered: center click ({center_x}, {center_y})")
-                await asyncio.sleep(2)
-        except Exception as e:
-            print(f"⚠️ Center click failed: {e}")
-        
-        # Check if video is playing
-        try:
-            is_playing = await target.evaluate("""
-                () => {
-                    const video = document.querySelector('video');
-                    return video && !video.paused && !video.ended && video.readyState > 2;
-                }
-            """)
-            if is_playing:
-                print("✅ Video is playing!")
-            else:
-                print("⚠️ Video element exists but may not be playing")
-        except:
-            print("⚠️ Could not verify video playback state")
-        
-        print(f"📝 Interactions attempted: {', '.join(interactions_attempted)}")
-        
-        # Extended wait for stream request
-        print("⏳ Waiting for stream to be requested (max 60s)...")
-        try:
-            await page.wait_for_event(
-                "response",
-                lambda resp: ".m3u8" in resp.url,
-                timeout=60000
-            )
-            print("✅ M3U8 stream detected. Proceeding immediately to validation.")
-        except PlaywrightTimeoutError:
-            print("⚠️ Stream request did not start within 60 seconds. Checking for streams anyway...")
-        except Exception as e:
-            print(f"❌ Failed during wait for M3U8 event: {e}")
-
-        # Final wait to capture late-loading streams
-        await asyncio.sleep(5)
-
-        page.remove_listener("request", handle_request)
-        page.remove_listener("response", handle_response)
-
-        if not found_streams:
-            print(f"❌ No M3U8 URLs were captured for {iframe_url}")
-            return set()
-
-        valid_urls = set()
-        tasks = [check_m3u8_url(url, iframe_url) for url in found_streams]
-        results = await asyncio.gather(*tasks)
-        
-        for url, is_valid in zip(found_streams, results):
-            if is_valid:
-                valid_urls.add(url)
-            else:
-                print(f"🗑️ Discarding invalid or unreachable URL: {url}")
-                
-        return valid_urls
+        print("⚠️ No iframe src found in HTML")
+        return None
     except Exception as e:
-        print(f"❌ Error in grab_m3u8_from_iframe: {e}")
-        return set()
-
-async def check_m3u8_url(url, referer):
-    """Checks the M3U8 URL using the correct referer for validation."""
-    
-    if "gg.poocloud.in" in url:
-        return True
-
-    try:
-        origin = "https://" + referer.split('/') if referer else "https://ppv.to"
-        headers = {
-            "User-Agent": DEFAULT_UA,
-            "Referer": referer,
-            "Origin": origin
-        }
-        timeout = aiohttp.ClientTimeout(total=15)
-        async with aiohttp.ClientSession(timeout=timeout, headers=headers) as session:
-            async with session.get(url, headers=headers) as resp:
-                return resp.status in [200, 403]
-    except Exception as e:
-        print(f"❌ Error checking {url}: {e}")
-        return False
-
-async def get_streams():
-    try:
-        timeout = aiohttp.ClientTimeout(total=30)
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:142.0) Gecko/20100101 Firefox/142.0'
-        }
-        async with aiohttp.ClientSession(timeout=timeout, headers=headers) as session:
-            print(f"🌐 Fetching streams from {API_URL}")
-            async with session.get(API_URL) as resp:
-                print(f"🔍 Response status: {resp.status}")
-                if resp.status != 200:
-                    error_text = await resp.text()
-                    print(f"❌ Error response: {error_text[:500]}")
-                    return None
-                return await resp.json()
-    except Exception as e:
-        print(f"❌ Error in get_streams: {str(e)}")
+        print(f"⚠️ Failed to extract iframe src from HTML: {e}")
         return None
 
-async def grab_live_now_from_html(page, base_url="https://ppv.to/"):
-    print("🌐 Scraping 'Live Now' streams from HTML...")
-    live_now_streams = []
+
+async def trigger_user_interactions(page):
+    """Trigger user-like interactions to activate lazy-loaded content"""
     try:
-        await page.goto(base_url, timeout=20000)
-        await asyncio.sleep(3)
-
-        live_cards = await page.query_selector_all("#livecards a.item-card")
-        for card in live_cards:
-            href = await card.get_attribute("href")
-            name_el = await card.query_selector(".card-title")
-            poster_el = await card.query_selector("img.card-img-top")
-            name = await name_el.inner_text() if name_el else "Unnamed Live"
-            poster = await poster_el.get_attribute("src") if poster_el else None
-
-            if href:
-                iframe_url = f"{base_url.rstrip('/')}{href}"
-                live_now_streams.append({
-                    "name": name.strip(),
-                    "iframe": iframe_url,
-                    "category": "Live Now",
-                    "poster": poster
-                })
+        # Move mouse to simulate human behavior
+        await page.mouse.move(100, 100)
+        await asyncio.sleep(0.3)
+        await page.mouse.move(500, 500)
+        await asyncio.sleep(0.3)
+        
+        # Scroll to trigger lazy loading
+        await page.evaluate("window.scrollTo(0, document.body.scrollHeight / 2)")
+        await asyncio.sleep(0.5)
+        await page.evaluate("window.scrollTo(0, 0)")
+        await asyncio.sleep(0.5)
+        
+        # Click in center of page
+        viewport = page.viewport_size
+        center_x = viewport['width'] // 2
+        center_y = viewport['height'] // 2
+        await page.mouse.click(center_x, center_y)
+        await asyncio.sleep(0.5)
+        
+        # Hover over potential iframe area
+        await page.mouse.move(center_x, center_y)
+        await asyncio.sleep(0.5)
+        
+        print("✅ Triggered user-like interactions")
     except Exception as e:
-        print(f"❌ Failed scraping 'Live Now': {e}")
+        print(f"⚠️ Failed to trigger interactions: {e}")
 
-    print(f"✅ Found {len(live_now_streams)} 'Live Now' streams")
-    return live_now_streams
 
-def _encode_param(value: str) -> str:
-    """Percent-encode a header value for use in the pipe params"""
-    return urllib.parse.quote(value or "", safe='')
-
-def build_m3u(streams, url_map):
+async def wait_for_iframe_src_advanced(page, timeout=45) -> Optional[str]:
     """
-    Build M3U formatted output compatible with Kodi-style playlist entries.
-    For each stream we append a single best URL followed by pipe-separated,
-    percent-encoded header params: |User-Agent=...&Referer=...&Origin=...
+    Advanced iframe src detection with multiple strategies:
+    1. Poll for iframe src attribute
+    2. Check data-src attribute
+    3. Monitor JavaScript execution
+    4. Extract from HTML source
+    5. Wait for iframe content to load
     """
-    lines = ['#EXTM3U url-tvg="https://epgshare01.online/epgshare01/epg_ripper_DUMMY_CHANNELS.xml.gz"']
-    seen_names = set()
-    for s in streams:
-        name_lower = s["name"].strip().lower()
-        if name_lower in seen_names:
-            continue
-        seen_names.add(name_lower)
-
-        unique_key = f"{s['name']}::{s['category']}::{s['iframe']}"
-        urls = url_map.get(unique_key, [])
-        if not urls:
-            print(f"⚠️ No working URLs for {s['name']}")
-            continue
-
-        orig_category = s.get("category") or "Misc"
-        final_group = GROUP_RENAME_MAP.get(orig_category, f"PPVLand - {orig_category}")
-        logo = s.get("poster") or CATEGORY_LOGOS.get(orig_category, "http://drewlive24.duckdns.org:9000/Logos/Default.png")
-        tvg_id = CATEGORY_TVG_IDS.get(orig_category, "Misc.Dummy.us")
-
-        if orig_category == "American Football":
-            matched_team = None
-            for team in NFL_TEAMS:
-                if team in name_lower:
-                    tvg_id = "NFL.Dummy.us"
-                    final_group = "PPVLand - NFL Action"
-                    matched_team = team
-                    break
-            if not matched_team:
-                for team in COLLEGE_TEAMS:
-                    if team in name_lower:
-                        tvg_id = "NCAA.Football.Dummy.us"
-                        final_group = "PPVLand - College Football"
-                        matched_team = team
-                        break
-
-        # Pick the first available URL
-        url = next(iter(urls))
-
-        # Build the pipe-appended, percent-encoded header params
+    print(f"⏳ Waiting for iframe src to populate (max {timeout}s)...")
+    start_time = time.time()
+    check_interval = 0.5
+    last_log_time = start_time
+    
+    while time.time() - start_time < timeout:
+        elapsed = time.time() - start_time
+        
+        # Log progress every 5 seconds
+        if elapsed - (last_log_time - start_time) >= 5:
+            print(f"   ... still waiting ({elapsed:.1f}s elapsed)")
+            last_log_time = time.time()
+        
+        # Strategy 1: Check iframe src attribute directly
         try:
-            referer = s.get("iframe") or ""
-            origin = "https://" + referer.split('/') if referer else "https://ppv.to"
+            iframes = await page.query_selector_all('iframe')
+            for idx, iframe in enumerate(iframes):
+                src = await iframe.get_attribute('src')
+                if src and src != 'about:blank' and src.startswith('http'):
+                    print(f"✅ Iframe {idx} src populated: {src}")
+                    return src
+                
+                # Check data-src attribute
+                data_src = await iframe.get_attribute('data-src')
+                if data_src and data_src != 'about:blank' and data_src.startswith('http'):
+                    print(f"✅ Iframe {idx} data-src found: {data_src}")
+                    # Try to trigger src from data-src
+                    try:
+                        await page.evaluate(f"document.querySelectorAll('iframe')[{idx}].src = document.querySelectorAll('iframe')[{idx}].getAttribute('data-src')")
+                        await asyncio.sleep(1)
+                        src = await iframe.get_attribute('src')
+                        if src and src.startswith('http'):
+                            return src
+                    except Exception:
+                        pass
+        except Exception as e:
+            print(f"⚠️ Error checking iframe attributes: {e}")
+        
+        # Strategy 2: Get detailed JS info every 10 checks
+        if int(elapsed / check_interval) % 10 == 0:
+            js_info = await get_iframe_info_via_js(page)
+            for info in js_info:
+                if info.get('src') and info['src'] != 'about:blank':
+                    print(f"✅ Found src via JS: {info['src']}")
+                    return info['src']
+                if info.get('dataSrc'):
+                    print(f"📊 Found data-src via JS: {info['dataSrc']}")
+        
+        await asyncio.sleep(check_interval)
+    
+    print(f"⚠️ Iframe src not populated after {timeout}s")
+    
+    # Final fallback: Extract from HTML
+    html_src = await extract_iframe_src_from_html(page)
+    if html_src:
+        return html_src
+    
+    return None
+
+
+async def navigate_and_detect_iframe(page, url: str, timeout: int = 60) -> Optional[str]:
+    """
+    Navigate to URL and detect iframe src with comprehensive error handling
+    
+    Returns:
+        iframe_src: The detected iframe URL, or None if not found
+    """
+    try:
+        print(f"🌐 Navigating to iframe: {url}")
+        
+        # Navigate to the page
+        try:
+            await page.goto(url, wait_until='domcontentloaded', timeout=timeout * 1000)
+            print("✅ Page loaded (domcontentloaded)")
+        except Exception as e:
+            print(f"⚠️ Navigation timeout or error: {e}")
+            # Continue anyway, page might have partially loaded
+        
+        # Wait for network to settle
+        try:
+            await page.wait_for_load_state('networkidle', timeout=10000)
+            print("✅ Network idle detected")
         except Exception:
-            origin = "https://ppv.to"
+            print("⚠️ Network idle timeout, continuing...")
+        
+        # Additional wait for JavaScript execution
+        await asyncio.sleep(2)
+        
+        # Check for blocking elements first
+        blockers = await check_for_blocking_elements(page)
+        if blockers:
+            print(f"⚠️ Found {len(blockers)} blocking elements, attempting to close...")
+            # Try to close modals/overlays
+            try:
+                close_selectors = ['button.close', '[aria-label="Close"]', '.modal-close', 'button:has-text("Close")']
+                for selector in close_selectors:
+                    element = await page.query_selector(selector)
+                    if element:
+                        await element.click()
+                        await asyncio.sleep(0.5)
+            except Exception:
+                pass
+        
+        # Trigger user interactions to activate lazy loading
+        await trigger_user_interactions(page)
+        
+        # Get initial iframe info
+        print("📊 Checking initial iframe state...")
+        js_info = await get_iframe_info_via_js(page)
+        if js_info:
+            print(f"🔍 Found {len(js_info)} iframe(s) in DOM:")
+            for info in js_info:
+                print(f"   Iframe {info['index']}: src={info['src']}, data-src={info['dataSrc']}, visible={info['isVisible']}")
+        else:
+            print("⚠️ No iframes found in DOM")
+            return None
+        
+        # Wait for iframe src to populate
+        iframe_src = await wait_for_iframe_src_advanced(page, timeout=45)
+        
+        if not iframe_src:
+            print("❌ Failed to detect iframe src after all attempts")
+            
+            # Debug: Take screenshot and dump HTML
+            try:
+                screenshot_path = f"debug_no_iframe_{int(time.time())}.png"
+                await page.screenshot(path=screenshot_path)
+                print(f"📸 Debug screenshot saved: {screenshot_path}")
+                
+                html_path = f"debug_no_iframe_{int(time.time())}.html"
+                content = await page.content()
+                with open(html_path, 'w', encoding='utf-8') as f:
+                    f.write(content)
+                print(f"📄 Debug HTML saved: {html_path}")
+            except Exception as e:
+                print(f"⚠️ Failed to save debug files: {e}")
+            
+            return None
+        
+        # Validate the iframe src
+        if not iframe_src.startswith('http'):
+            print(f"⚠️ Invalid iframe src (not HTTP): {iframe_src}")
+            return None
+        
+        return iframe_src
+        
+    except Exception as e:
+        print(f"❌ Error in navigate_and_detect_iframe: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
 
-        ua_enc = _encode_param(DEFAULT_UA)
-        ref_enc = _encode_param(referer)
-        origin_enc = _encode_param(origin)
 
-        param_str = f"|User-Agent={ua_enc}&Referer={ref_enc}&Origin={origin_enc}"
+async def get_all_frames_info(page) -> List[Dict[str, str]]:
+    """Get information about all frames including nested ones"""
+    frames_info = []
+    try:
+        all_frames = page.frames
+        print(f"📊 Found {len(all_frames)} total frames (including nested)")
+        for idx, frame in enumerate(all_frames):
+            url = frame.url
+            frames_info.append({'index': idx, 'url': url})
+            print(f"   Frame {idx}: {url}")
+    except Exception as e:
+        print(f"⚠️ Error getting frames info: {e}")
+    return frames_info
 
-        lines.append(f'#EXTINF:-1 tvg-id="{tvg_id}" tvg-logo="{logo}" group-title="{final_group}",{s["name"]}')
-        lines.append(f'{url}{param_str}')
-    return "\n".join(lines)
+
+# ============================================================================
+# INTEGRATION INTO MAIN SCRAPING FLOW
+# ============================================================================
+
+async def scrape_stream_enhanced(page, stream_data: dict, stream_index: int, total_streams: int) -> Optional[str]:
+    """
+    Enhanced stream scraping with advanced iframe detection
+    
+    Args:
+        page: Playwright page object
+        stream_data: Dictionary with stream info (title, iframe_url, category)
+        stream_index: Current stream index
+        total_streams: Total number of streams
+    
+    Returns:
+        m3u8_url: The captured M3U8 URL, or None if failed
+    """
+    title = stream_data.get('title', 'Unknown')
+    iframe_url = stream_data.get('iframe_url')
+    category = stream_data.get('category', 'Unknown')
+    
+    print(f"\n🔎 Scraping stream {stream_index}/{total_streams}: {title} ({category})")
+    
+    if not iframe_url:
+        print("❌ No iframe URL provided")
+        return None
+    
+    # Navigate and detect iframe
+    detected_iframe_src = await navigate_and_detect_iframe(page, iframe_url, timeout=60)
+    
+    if not detected_iframe_src:
+        print(f"❌ Could not detect iframe src for {title}")
+        return None
+    
+    # Get all frames info for debugging
+    await get_all_frames_info(page)
+    
+    # Now navigate to the detected iframe src
+    print(f"🎯 Navigating to detected iframe: {detected_iframe_src}")
+    try:
+        await page.goto(detected_iframe_src, wait_until='domcontentloaded', timeout=60000)
+        await asyncio.sleep(3)
+    except Exception as e:
+        print(f"⚠️ Error navigating to iframe src: {e}")
+    
+    # Continue with video detection and stream capture...
+    # (Your existing video detection and M3U8 capture code goes here)
+    
+    return None  # Replace with actual M3U8 URL when captured
+
+
+# ============================================================================
+# EXAMPLE USAGE
+# ============================================================================
 
 async def main():
-    print("🚀 Starting PPV Stream Fetcher")
-    data = await get_streams()
-    if not data or 'streams' not in data:
-        print("❌ No valid data received from the API")
-        if data:
-            print(f"API Response: {data}")
-        return
-
-    print(f"✅ Found {len(data['streams'])} categories")
-    streams = []
-    for category in data.get("streams", []):
-        cat = category.get("category", "").strip() or "Misc"
-        if cat not in ALLOWED_CATEGORIES:
-            ALLOWED_CATEGORIES.add(cat)
-        for stream in category.get("streams", []):
-            iframe = stream.get("iframe") 
-            name = stream.get("name", "Unnamed Event")
-            poster = stream.get("poster")
-            if iframe:
-                streams.append({
-                    "name": name,
-                    "iframe": iframe,
-                    "category": cat,
-                    "poster": poster
-                })
-
-    seen_names = set()
-    deduped_streams = []
-    for s in streams:
-        name_key = s["name"].strip().lower()
-        if name_key not in seen_names:
-            seen_names.add(name_key)
-            deduped_streams.append(s)
-    streams = deduped_streams
-
+    from playwright.async_api import async_playwright
+    
     async with async_playwright() as p:
-        browser = await p.firefox.launch(
-            headless=True,
-            firefox_user_prefs={
-                "media.autoplay.default": 0,
-                "media.autoplay.blocking_policy": 0
-            }
-        )
+        browser = await p.firefox.launch(headless=True)
         context = await browser.new_context(
             viewport={'width': 1920, 'height': 1080},
-            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:143.0) Gecko/20100101 Firefox/143.0',
-            locale='en-US',
-            timezone_id='America/New_York'
+            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         )
         page = await context.new_page()
-        url_map = {}
-
-        total_streams = len(streams)
-        for idx, s in enumerate(streams, start=1):
-            key = f"{s['name']}::{s['category']}::{s['iframe']}"
-            print(f"\n🔎 Scraping stream {idx}/{total_streams}: {s['name']} ({s['category']})")
-            try:
-                urls = await grab_m3u8_from_iframe(page, s["iframe"])
-                if urls:
-                    print(f"✅ Got {len(urls)} stream(s) for {s['name']} ({idx}/{total_streams})")
-                    url_map[key] = urls
-                else:
-                    print(f"⚠️ No valid streams for {s['name']} ({idx}/{total_streams})")
-                    url_map[key] = set()
-            except Exception as e:
-                print(f"❌ Critical error for {s['name']}: {e}")
-                url_map[key] = set()
-            finally:
-                if idx < total_streams:
-                    await asyncio.sleep(2)  # Delay between requests to avoid rate limiting
-
-        live_now_streams = await grab_live_now_from_html(page)
-        for s in live_now_streams:
-            key = f"{s['name']}::{s['category']}::{s['iframe']}"
-            print(f"\n🔎 Scraping 'Live Now' stream {idx+1}/{total_streams}: {s['name']} ({s['category']})")
-            try:
-                urls = await grab_m3u8_from_iframe(page, s["iframe"])
-                if urls:
-                    print(f"✅ Got {len(urls)} 'Live Now' stream(s) for {s['name']}")
-                    url_map[key] = urls
-                else:
-                    print(f"⚠️ No valid 'Live Now' streams for {s['name']}")
-                    url_map[key] = set()
-            except Exception as e:
-                print(f"❌ Critical error for {s['name']}: {e}")
-                url_map[key] = set()
-            finally:
-                if idx < total_streams:
-                    await asyncio.sleep(2)  # Delay between requests to avoid rate limiting
-
-        streams.extend(live_now_streams)
-
+        
+        # Test with one of your failing streams
+        test_stream = {
+            'title': 'Indiana Pacers vs. Atlanta Hawks',
+            'iframe_url': 'https://modistreams.org/embed/nba/2026-01-30/ind-atl',
+            'category': 'Basketball'
+        }
+        
+        result = await scrape_stream_enhanced(page, test_stream, 1, 1)
+        
         await browser.close()
-
-    print("\n💾 Writing final playlist to PPVLand.m3u8 ...")
-    playlist = build_m3u(streams, url_map)
-    with open("PPVLand.m3u8", "w", encoding="utf-8") as f:
-        f.write(playlist)
-    print(f"✅ Done! Playlist saved as PPVLand.m3u8 at {datetime.utcnow().isoformat()} UTC")
 
 if __name__ == "__main__":
     asyncio.run(main())
