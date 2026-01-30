@@ -56,8 +56,6 @@ GROUP_RENAME_MAP = {
     "Miscellaneous": "PPVLand - Random Events"
 }
 
-# NFL_TEAMS and COLLEGE_TEAMS are removed as Football is not allowed
-
 def get_all_frames(frame):
     """Recursively get all frames including nested ones"""
     all_frames = [frame]
@@ -449,22 +447,6 @@ def build_m3u(streams, url_map):
         logo = s.get("poster") or CATEGORY_LOGOS.get(orig_category, "http://drewlive24.duckdns.org:9000/Logos/Default.png")
         tvg_id = CATEGORY_TVG_IDS.get(orig_category, "Misc.Dummy.us")
 
-        if orig_category == "American Football":
-            matched_team = None
-            for team in NFL_TEAMS:
-                if team in name_lower:
-                    tvg_id = "NFL.Dummy.us"
-                    final_group = "PPVLand - NFL Action"
-                    matched_team = team
-                    break
-            if not matched_team:
-                for team in COLLEGE_TEAMS:
-                    if team in name_lower:
-                        tvg_id = "NCAA.Football.Dummy.us"
-                        final_group = "PPVLand - College Football"
-                        matched_team = team
-                        break
-
         # Pick the first available URL
         url = next(iter(urls))
 
@@ -558,9 +540,9 @@ async def main():
                     await asyncio.sleep(2)  # Delay between requests to avoid rate limiting
 
         live_now_streams = await grab_live_now_from_html(page)
-        for s in live_now_streams:
+        for live_idx, s in enumerate(live_now_streams, start=total_streams+1):
             key = f"{s['name']}::{s['category']}::{s['iframe']}"
-            print(f"\n🔎 Scraping 'Live Now' stream {idx+1}/{total_streams}: {s['name']} ({s['category']})")
+            print(f"\n🔎 Scraping 'Live Now' stream {live_idx}/{total_streams + len(live_now_streams)}: {s['name']} ({s['category']})")
             try:
                 urls = await grab_m3u8_from_iframe(page, s["iframe"])
                 if urls:
@@ -573,7 +555,7 @@ async def main():
                 print(f"❌ Critical error for {s['name']}: {e}")
                 url_map[key] = set()
             finally:
-                if idx < total_streams:
+                if live_idx < (total_streams + len(live_now_streams)):
                     await asyncio.sleep(2)  # Delay between requests to avoid rate limiting
 
         streams.extend(live_now_streams)
