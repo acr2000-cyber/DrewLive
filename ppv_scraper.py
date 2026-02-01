@@ -18,8 +18,7 @@ DEFAULT_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:143.0) Gecko/20100101
 
 ALLOWED_CATEGORIES = {
     "24/7 Streams", "Wrestling", "Basketball", "Combat Sports",
-    "Darts", "Motorsports", "Ice Hockey",
-    "Miscellaneous"
+    "Darts", "Motorsports", "Ice Hockey", "Miscellaneous"
 }
 
 CATEGORY_LOGOS = {
@@ -70,10 +69,13 @@ async def wait_for_iframe_src(page, max_attempts=30, delay=0.5):
             for iframe in iframes:
                 src = await iframe.get_attribute('src')
                 if src and src.startswith('http'):
+                    print(f"✅ iframe src populated after {attempt * delay:.1f}s: {src}")
                     return src
         except:
             pass
         await asyncio.sleep(delay)
+    
+    print(f"⚠️ iframe src did not populate after {max_attempts * delay:.1f}s")
     return None
 
 async def wait_for_video_element(target, max_attempts=20, delay=0.5):
@@ -82,10 +84,13 @@ async def wait_for_video_element(target, max_attempts=20, delay=0.5):
         try:
             video = await target.query_selector('video')
             if video:
+                print(f"✅ Video element appeared after {attempt * delay:.1f}s")
                 return video
         except:
             pass
         await asyncio.sleep(delay)
+    
+    print(f"⚠️ Video element did not appear after {max_attempts * delay:.1f}s")
     return None
 
 async def grab_m3u8_from_iframe(page, iframe_url):
@@ -95,12 +100,15 @@ async def grab_m3u8_from_iframe(page, iframe_url):
     def handle_request(request):
         url = request.url
         if ".m3u8" in url:
+            print(f"🎯 M3U8 in REQUEST: {url}")
             found_streams.add(url)
     
     def handle_response(response):
         url = response.url
         content_type = response.headers.get('content-type', '').lower()
+        
         if ".m3u8" in url or "mpegurl" in content_type or "application/vnd.apple.mpegurl" in content_type:
+            print(f"✅ Found M3U8 Stream: {url}")
             found_streams.add(url)
         elif ".ts" in url and "segment" in url.lower():
             print(f"🎬 Detected .ts segment (stream active): {url[:100]}...")
@@ -108,11 +116,12 @@ async def grab_m3u8_from_iframe(page, iframe_url):
     page.on("request", handle_request)
     page.on("response", handle_response)
     
+    print(f"🌐 Navigating to iframe: {iframe_url}")
+    
     try:
         await page.goto(iframe_url, wait_until="domcontentloaded", timeout=30000)
         print("✅ Page loaded (domcontentloaded)")
         
-        # Wait for network idle
         try:
             await page.wait_for_load_state("networkidle", timeout=15000)
             print("✅ Network idle detected")
@@ -124,21 +133,39 @@ async def grab_m3u8_from_iframe(page, iframe_url):
         
         if nested_iframe_url and nested_iframe_url != iframe_url:
             print(f"🔄 Found populated nested iframe: {nested_iframe_url}")
+            print(f"🌐 Navigating to nested iframe: {nested_iframe_url}")
             await page.goto(nested_iframe_url, wait_until="domcontentloaded", timeout=30000)
+            
+            try:
+                await page.wait_for_load_state("networkidle", timeout=15000)
+                print("✅ Network idle detected (nested iframe)")
+            except:
+                print("⚠️ Network idle timeout (nested iframe)")
+            
             await asyncio.sleep(2)
+        else:
+            print("⚠️ No nested iframe src found - using current page")
+        
+        # Get all frames
+        all_frames = get_all_frames(page.main_frame)
+        print(f"📊 Found {len(all_frames)} total frames")
         
         # Check for video elements
-        all_frames = get_all_frames(page.main_frame)
+        video_found = False
         for frame in all_frames:
             try:
                 video = await frame.query_selector('video')
                 if video:
-                    print("✅ Video element found")
+                    print("✅ Video element found in frame")
+                    video_found = True
                     break
             except:
                 continue
         
-        # Try interactions
+        if not video_found:
+            print("⚠️ No video element found in any frame")
+        
+        # Try JavaScript play
         try:
             await page.evaluate("""
                 () => {
@@ -151,26 +178,43 @@ async def grab_m3u8_from_iframe(page, iframe_url):
                 }
             """)
             print("✅ Triggered: JavaScript play() method")
-        except:
-            pass
+            await asyncio.sleep(2)
+        except Exception as e:
+            print(f"⚠️ JavaScript play() failed: {e}")
         
-        # Wait for video element
+        # Wait for video element to appear
         video_element = await wait_for_video_element(page, max_attempts=20, delay=0.5)
         
         # Wait for stream request
+        print("⏳ Waiting for stream to be requested (max 60s)...")
         try:
             await page.wait_for_event("response", lambda resp: ".m3u8" in resp.url, timeout=60000)
-            print("✅ M3U8 stream detected")
-        except:
-            print("⚠️ Stream request did not start within 60 seconds")
+            print("✅ M3U8 stream detected. Proceeding immediately to validation.")
+        except PlaywrightTimeoutError:
+            print("⚠️ Stream request did not start within 60 seconds. Checking for streams anyway...")
+        except Exception as e:
+            print(f"❌ Failed during wait for M3U8 event: {e}")
         
-        # Final check
         await asyncio.sleep(5)
         
         page.remove_listener("request", handle_request)
         page.remove_listener("response", handle_response)
         
-        return found_streams
+        if not found_streams:
+            print(f"❌ No M3U8 URLs were captured for {iframe_url}")
+            return set()
+        
+        valid_urls = set()
+        tasks = [check_m3u8_url(url, iframe_url) for url in found_streams]
+        results = await asyncio.gather(*tasks)
+        
+        for url, is_valid in zip(found_streams, results):
+            if is_valid:
+                valid_urls.add(url)
+            else:
+                print(f"🗑️ Discarding invalid or unreachable URL: {url}")
+        
+        return valid_urls
         
     except Exception as e:
         print(f"❌ Error in grab_m3u8_from_iframe: {e}")
@@ -180,6 +224,7 @@ async def check_m3u8_url(url, referer):
     """Checks the M3U8 URL using the correct referer for validation."""
     if "gg.poocloud.in" in url:
         return True
+    
     try:
         origin = "https://" + referer.split('/') if referer else "https://ppv.to"
         headers = {
@@ -200,7 +245,9 @@ async def get_streams():
         timeout = aiohttp.ClientTimeout(total=30)
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:142.0) Gecko/20100101 Firefox/142.0'}
         async with aiohttp.ClientSession(timeout=timeout, headers=headers) as session:
+            print(f"🌐 Fetching streams from {API_URL}")
             async with session.get(API_URL) as resp:
+                print(f"🔍 Response status: {resp.status}")
                 if resp.status != 200:
                     error_text = await resp.text()
                     print(f"❌ Error response: {error_text[:500]}")
@@ -210,15 +257,125 @@ async def get_streams():
         print(f"❌ Error in get_streams: {str(e)}")
         return None
 
+async def grab_live_now_from_html(page, base_url="https://ppv.to/"):
+    print("🌐 Scraping 'Live Now' streams from HTML...")
+    live_now_streams = []
+    try:
+        await page.goto(base_url, timeout=20000)
+        await asyncio.sleep(3)
+
+        live_cards = await page.query_selector_all("#livecards a.item-card")
+        for card in live_cards:
+            href = await card.get_attribute("href")
+            name_el = await card.query_selector(".card-title")
+            poster_el = await card.query_selector("img.card-img-top")
+            name = await name_el.inner_text() if name_el else "Unnamed Live"
+            poster = await poster_el.get_attribute("src") if poster_el else None
+
+            if href:
+                iframe_url = f"{base_url.rstrip('/')}{href}"
+                live_now_streams.append({
+                    "name": name.strip(),
+                    "iframe": iframe_url,
+                    "category": "Live Now",
+                    "poster": poster
+                })
+    except Exception as e:
+        print(f"❌ Failed scraping 'Live Now': {e}")
+
+    print(f"✅ Found {len(live_now_streams)} 'Live Now' streams")
+    return live_now_streams
+
+def _encode_param(value: str) -> str:
+    """Percent-encode a header value for use in the pipe params"""
+    return urllib.parse.quote(value or "", safe='')
+
+def build_m3u(streams, url_map):
+    """Build M3U formatted output compatible with Kodi-style playlist entries."""
+    lines = ['#EXTM3U url-tvg="https://epgshare01.online/epgshare01/epg_ripper_DUMMY_CHANNELS.xml.gz"']
+    seen_names = set()
+    
+    for s in streams:
+        name_lower = s["name"].strip().lower()
+        if name_lower in seen_names:
+            continue
+        seen_names.add(name_lower)
+
+        unique_key = f"{s['name']}::{s['category']}::{s['iframe']}"
+        urls = url_map.get(unique_key, [])
+        if not urls:
+            print(f"⚠️ No working URLs for {s['name']}")
+            continue
+
+        orig_category = s.get("category") or "Misc"
+        final_group = GROUP_RENAME_MAP.get(orig_category, f"PPVLand - {orig_category}")
+        logo = s.get("poster") or CATEGORY_LOGOS.get(orig_category, "http://drewlive24.duckdns.org:9000/Logos/Default.png")
+        tvg_id = CATEGORY_TVG_IDS.get(orig_category, "Misc.Dummy.us")
+
+        url = next(iter(urls))
+
+        try:
+            referer = s.get("iframe") or ""
+            origin = "https://" + referer.split('/') if referer else "https://ppv.to"
+        except Exception:
+            origin = "https://ppv.to"
+
+        ua_enc = _encode_param(DEFAULT_UA)
+        ref_enc = _encode_param(referer)
+        origin_enc = _encode_param(origin)
+
+        param_str = f"|User-Agent={ua_enc}&Referer={ref_enc}&Origin={origin_enc}"
+
+        lines.append(f'#EXTINF:-1 tvg-id="{tvg_id}" tvg-logo="{logo}" group-title="{final_group}",{s["name"]}')
+        lines.append(f'{url}{param_str}')
+    
+    return "\n".join(lines)
+
 async def main():
     print("🚀 Starting PPV Stream Fetcher")
     data = await get_streams()
     if not data or 'streams' not in data:
         print("❌ No valid data received from the API")
+        if data:
+            print(f"API Response: {data}")
         return
 
+    print(f"✅ Found {len(data['streams'])} categories")
+    streams = []
+    for category in data.get("streams", []):
+        cat = category.get("category", "").strip() or "Misc"
+        if cat not in ALLOWED_CATEGORIES:
+            ALLOWED_CATEGORIES.add(cat)
+        for stream in category.get("streams", []):
+            iframe = stream.get("iframe") 
+            name = stream.get("name", "Unnamed Event")
+            poster = stream.get("poster")
+            if iframe:
+                streams.append({
+                    "name": name,
+                    "iframe": iframe,
+                    "category": cat,
+                    "poster": poster
+                })
+
+    # Deduplicate streams
+    seen_names = set()
+    deduped_streams = []
+    for s in streams:
+        name_key = s["name"].strip().lower()
+        if name_key not in seen_names:
+            seen_names.add(name_key)
+            deduped_streams.append(s)
+    streams = deduped_streams
+
     async with async_playwright() as p:
-        browser = await p.firefox.launch(headless=True)
+        browser = await p.firefox.launch(
+            headless=True,
+            firefox_user_prefs={
+                "media.autoplay.default": 0,
+                "media.autoplay.blocking_policy": 0
+            }
+        )
         context = await browser.new_context(
             viewport={'width': 1920, 'height': 1080},
             user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:143.0) Gecko/20100101 Firefox/143.0',
@@ -226,45 +383,56 @@ async def main():
             timezone_id='America/New_York'
         )
         page = await context.new_page()
-        
-        # Get streams from API
-        streams = []
-        for category in data.get("streams", []):
-            cat = category.get("category", "").strip() or "Misc"
-            if cat not in ALLOWED_CATEGORIES:
-                ALLOWED_CATEGORIES.add(cat)
-            for stream in category.get("streams", []):
-                iframe = stream.get("iframe") 
-                name = stream.get("name", "Unnamed Event")
-                poster = stream.get("poster")
-                if iframe:
-                    streams.append({
-                        "name": name,
-                        "iframe": iframe,
-                        "category": cat,
-                        "poster": poster
-                    })
-        
-        # Process streams
         url_map = {}
+
+        total_streams = len(streams)
         for idx, s in enumerate(streams, start=1):
             key = f"{s['name']}::{s['category']}::{s['iframe']}"
-            print(f"\n🔎 Scraping stream {idx}/{len(streams)}: {s['name']} ({s['category']})")
+            print(f"\n🔎 Scraping stream {idx}/{total_streams}: {s['name']} ({s['category']})")
             try:
                 urls = await grab_m3u8_from_iframe(page, s["iframe"])
-                url_map[key] = urls
+                if urls:
+                    print(f"✅ Got {len(urls)} stream(s) for {s['name']} ({idx}/{total_streams})")
+                    url_map[key] = urls
+                else:
+                    print(f"⚠️ No valid streams for {s['name']} ({idx}/{total_streams})")
+                    url_map[key] = set()
             except Exception as e:
                 print(f"❌ Critical error for {s['name']}: {e}")
                 url_map[key] = set()
             finally:
-                if idx < len(streams):
+                if idx < total_streams:
                     await asyncio.sleep(2)
-        
-        # Build playlist
-        playlist = build_m3u(streams, url_map)
-        with open("PPVLand.m3u8", "w", encoding="utf-8") as f:
-            f.write(playlist)
-        print(f"✅ Done! Playlist saved as PPVLand.m3u8 at {datetime.utcnow().isoformat()} UTC")
+
+        # Scrape Live Now streams
+        live_now_streams = await grab_live_now_from_html(page)
+        for live_idx, s in enumerate(live_now_streams, start=total_streams+1):
+            key = f"{s['name']}::{s['category']}::{s['iframe']}"
+            print(f"\n🔎 Scraping 'Live Now' stream {live_idx}/{total_streams + len(live_now_streams)}: {s['name']} ({s['category']})")
+            try:
+                urls = await grab_m3u8_from_iframe(page, s["iframe"])
+                if urls:
+                    print(f"✅ Got {len(urls)} 'Live Now' stream(s) for {s['name']}")
+                    url_map[key] = urls
+                else:
+                    print(f"⚠️ No valid 'Live Now' streams for {s['name']}")
+                    url_map[key] = set()
+            except Exception as e:
+                print(f"❌ Critical error for {s['name']}: {e}")
+                url_map[key] = set()
+            finally:
+                if live_idx < (total_streams + len(live_now_streams)):
+                    await asyncio.sleep(2)
+
+        streams.extend(live_now_streams)
+
+        await browser.close()
+
+    print("\n💾 Writing final playlist to PPVLand.m3u8 ...")
+    playlist = build_m3u(streams, url_map)
+    with open("PPVLand.m3u8", "w", encoding="utf-8") as f:
+        f.write(playlist)
+    print(f"✅ Done! Playlist saved as PPVLand.m3u8 at {datetime.utcnow().isoformat()} UTC")
 
 if __name__ == "__main__":
     asyncio.run(main())
