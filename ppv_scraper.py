@@ -66,18 +66,195 @@ async def wait_for_iframe_src(page, max_attempts=30, delay=0.5):
     for attempt in range(max_attempts):
         try:
             iframes = await page.query_selector_all('iframe')
-            for iframe in iframes:
+            if attempt == 0:
+                print(f"🔍 Found {len(iframes)} iframes on initial check")
+            
+            for idx, iframe in enumerate(iframes):
                 src = await iframe.get_attribute('src')
                 if src and src.startswith('http'):
                     print(f"✅ iframe src populated after {attempt * delay:.1f}s: {src}")
                     return src
-        except:
-            pass
+                elif attempt % 10 == 0:  # Log every 5 seconds
+                    print(f"⏳ Attempt {attempt}: iframe {idx} src = {src or 'empty'}")
+        except Exception as e:
+            if attempt % 10 == 0:
+                print(f"⚠️ Error checking iframes at attempt {attempt}: {e}")
         await asyncio.sleep(delay)
     
     print(f"⚠️ iframe src did not populate after {max_attempts * delay:.1f}s")
     return None
 
+async def grab_m3u8_from_iframe(page, iframe_url):
+    """Enhanced stream detection with dynamic iframe loading support"""
+    found_streams = set()
+    
+    def handle_request(request):
+        url = request.url
+        if ".m3u8" in url:
+            print(f"🎯 M3U8 in REQUEST: {url}")
+            found_streams.add(url)
+    
+    def handle_response(response):
+        url = response.url
+        content_type = response.headers.get('content-type', '').lower()
+        
+        if ".m3u8" in url or "mpegurl" in content_type or "application/vnd.apple.mpegurl" in content_type:
+            print(f"✅ Found M3U8 Stream: {url}")
+            found_streams.add(url)
+        elif ".ts" in url and "segment" in url.lower():
+            print(f"🎬 Detected .ts segment (stream active): {url[:100]}...")
+
+    page.on("request", handle_request)
+    page.on("response", handle_response)
+    
+    print(f"🌐 Navigating to iframe: {iframe_url}")
+    
+    try:
+        await page.goto(iframe_url, wait_until="domcontentloaded", timeout=30000)
+        print("✅ Page loaded (domcontentloaded)")
+        
+        try:
+            await page.wait_for_load_state("networkidle", timeout=15000)
+            print("✅ Network idle detected")
+        except:
+            print("⚠️ Network idle timeout - continuing anyway")
+        
+        # Add interaction to trigger lazy-loaded content
+        print("🖱️ Triggering interactions to load player...")
+        try:
+            # Move mouse and click center of page
+            viewport = page.viewport_size
+            center_x = viewport['width'] // 2
+            center_y = viewport['height'] // 2
+            await page.mouse.move(center_x, center_y)
+            await page.mouse.click(center_x, center_y)
+            await asyncio.sleep(2)
+        except Exception as e:
+            print(f"⚠️ Interaction failed: {e}")
+        
+        # DEBUG: Check page content
+        html = await page.content()
+        iframe_count = html.count('<iframe')
+        print(f"🔍 Page HTML length: {len(html)} bytes")
+        print(f"🔍 Iframes in HTML: {iframe_count}")
+        
+        # Show first iframe found in HTML for debugging
+        if '<iframe' in html:
+            iframe_start = html.find('<iframe')
+            iframe_snippet = html[iframe_start:iframe_start+200]
+            print(f"🔍 First iframe HTML: {iframe_snippet}")
+        
+        # Wait for iframe src to be populated
+        nested_iframe_url = await wait_for_iframe_src(page, max_attempts=40, delay=0.5)
+        
+        if nested_iframe_url and nested_iframe_url != iframe_url:
+            print(f"🔄 Found populated nested iframe: {nested_iframe_url}")
+            print(f"🌐 Navigating to nested iframe: {nested_iframe_url}")
+            await page.goto(nested_iframe_url, wait_until="domcontentloaded", timeout=30000)
+            
+            try:
+                await page.wait_for_load_state("networkidle", timeout=15000)
+                print("✅ Network idle detected (nested iframe)")
+            except:
+                print("⚠️ Network idle timeout (nested iframe)")
+            
+            await asyncio.sleep(3)
+        else:
+            print("⚠️ No nested iframe src found - checking current page for player")
+            # Additional wait for dynamic content
+            await asyncio.sleep(5)
+        
+        # Get all frames
+        all_frames = get_all_frames(page.main_frame)
+        print(f"📊 Found {len(all_frames)} total frames")
+        
+        # DEBUG: Check for common player elements
+        print("🔍 Checking for player elements...")
+        player_selectors = [
+            'video', 
+            '[id*="player"]', 
+            '[class*="player"]',
+            '[id*="video"]',
+            '[class*="video"]'
+        ]
+        
+        for selector in player_selectors:
+            try:
+                elements = await page.query_selector_all(selector)
+                if elements:
+                    print(f"✅ Found {len(elements)} elements matching '{selector}'")
+            except:
+                pass
+        
+        # Check for video elements in all frames
+        video_found = False
+        for frame_idx, frame in enumerate(all_frames):
+            try:
+                video = await frame.query_selector('video')
+                if video:
+                    print(f"✅ Video element found in frame {frame_idx}")
+                    video_found = True
+                    break
+            except:
+                continue
+        
+        if not video_found:
+            print("⚠️ No video element found in any frame")
+        
+        # Try JavaScript play
+        try:
+            await page.evaluate("""
+                () => {
+                    const videos = document.querySelectorAll('video');
+                    videos.forEach(v => {
+                        v.muted = false;
+                        v.volume = 1.0;
+                        v.play().catch(e => console.log('Play failed:', e));
+                    });
+                }
+            """)
+            print("✅ Triggered: JavaScript play() method")
+            await asyncio.sleep(2)
+        except Exception as e:
+            print(f"⚠️ JavaScript play() failed: {e}")
+        
+        # Wait for video element to appear
+        video_element = await wait_for_video_element(page, max_attempts=20, delay=0.5)
+        
+        # Wait for stream request
+        print("⏳ Waiting for stream to be requested (max 60s)...")
+        try:
+            await page.wait_for_event("response", lambda resp: ".m3u8" in resp.url, timeout=60000)
+            print("✅ M3U8 stream detected. Proceeding immediately to validation.")
+        except PlaywrightTimeoutError:
+            print("⚠️ Stream request did not start within 60 seconds. Checking for streams anyway...")
+        except Exception as e:
+            print(f"❌ Failed during wait for M3U8 event: {e}")
+        
+        await asyncio.sleep(5)
+        
+        page.remove_listener("request", handle_request)
+        page.remove_listener("response", handle_response)
+        
+        if not found_streams:
+            print(f"❌ No M3U8 URLs were captured for {iframe_url}")
+            return set()
+        
+        valid_urls = set()
+        tasks = [check_m3u8_url(url, iframe_url) for url in found_streams]
+        results = await asyncio.gather(*tasks)
+        
+        for url, is_valid in zip(found_streams, results):
+            if is_valid:
+                valid_urls.add(url)
+            else:
+                print(f"🗑️ Discarding invalid or unreachable URL: {url}")
+        
+        return valid_urls
+        
+    except Exception as e:
+        print(f"❌ Error in grab_m3u8_from_iframe: {e}")
+        return set()
 async def wait_for_video_element(target, max_attempts=20, delay=0.5):
     """Poll for video element to appear after interactions"""
     for attempt in range(max_attempts):
