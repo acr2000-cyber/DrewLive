@@ -160,7 +160,137 @@ async def grab_m3u8_from_iframe(page, iframe_url):
                     print("✅ Video element found")
                     video_found = True
                     break
-            except
+            except Exception as e:
+                print(f"⚠️ Error checking frame for video: {e}")
+        
+        # Trigger playback with multiple methods
+        print("▶️ Attempting to trigger playback...")
+        await trigger_playback(page)
+        
+        # Wait for streams to be captured
+        await asyncio.sleep(3)
+        
+        # Validate and return found streams
+        valid_streams = set()
+        for url in found_streams:
+            if await check_m3u8_url(url, iframe_url):
+                valid_streams.add(url)
+                print(f"✅ Validated M3U8: {url[:80]}...")
+            else:
+                print(f"❌ Invalid M3U8: {url[:80]}...")
+        
+        print(f"📊 Total valid streams found: {len(valid_streams)}")
+        return valid_streams
+        
+    except PlaywrightTimeoutError as e:
+        print(f"⏱️ Timeout error: {e}")
+        return set()
+    except Exception as e:
+        print(f"❌ Error in grab_m3u8_from_iframe: {e}")
+        return set()
+    finally:
+        page.remove_listener("request", handle_request)
+        page.remove_listener("response", handle_response)
+        print("🧹 Cleaned up event listeners")
+
+
+async def trigger_playback(page):
+    """Trigger playback using multiple methods to activate player"""
+    methods_tried = 0
+    
+    # Method 1: JavaScript play() on video element
+    try:
+        result = await page.evaluate("""
+            () => {
+                const video = document.querySelector('video');
+                if (video) {
+                    video.play();
+                    return 'JS play() executed';
+                }
+                return 'No video element found';
+            }
+        """)
+        print(f"🎬 Method 1 (JS play): {result}")
+        methods_tried += 1
+        await asyncio.sleep(1)
+    except Exception as e:
+        print(f"⚠️ Method 1 failed: {e}")
+    
+    # Method 2: Keyboard spacebar
+    try:
+        await page.press("body", "Space")
+        print("🎬 Method 2 (Spacebar): Triggered")
+        methods_tried += 1
+        await asyncio.sleep(1)
+    except Exception as e:
+        print(f"⚠️ Method 2 failed: {e}")
+    
+    # Method 3: Keyboard Enter
+    try:
+        await page.press("body", "Enter")
+        print("🎬 Method 3 (Enter): Triggered")
+        methods_tried += 1
+        await asyncio.sleep(1)
+    except Exception as e:
+        print(f"⚠️ Method 3 failed: {e}")
+    
+    # Method 4: Click play button
+    try:
+        play_button = await page.query_selector('button[aria-label*="play" i], button.play, .play-button, [class*="play"]')
+        if play_button:
+            await play_button.click()
+            print("🎬 Method 4 (Play button): Clicked")
+            methods_tried += 1
+            await asyncio.sleep(1)
+        else:
+            print("⚠️ Method 4: No play button found")
+    except Exception as e:
+        print(f"⚠️ Method 4 failed: {e}")
+    
+    # Method 5: Double-click center of page
+    try:
+        viewport = page.viewport_size
+        center_x = viewport['width'] // 2
+        center_y = viewport['height'] // 2
+        await page.mouse.dblclick(center_x, center_y)
+        print("🎬 Method 5 (Double-click): Triggered")
+        methods_tried += 1
+        await asyncio.sleep(1)
+    except Exception as e:
+        print(f"⚠️ Method 5 failed: {e}")
+    
+    # Method 6: Trigger player library methods
+    try:
+        result = await page.evaluate("""
+            () => {
+                // HLS.js
+                if (window.hls) {
+                    window.hls.media.play();
+                    return 'HLS.js play executed';
+                }
+                // Video.js
+                if (window.videojs) {
+                    const player = window.videojs.players[Object.keys(window.videojs.players)];
+                    if (player) {
+                        player.play();
+                        return 'Video.js play executed';
+                    }
+                }
+                // JW Player
+                if (window.jwplayer) {
+                    window.jwplayer().play();
+                    return 'JW Player play executed';
+                }
+                return 'No player library found';
+            }
+        """)
+        print(f"🎬 Method 6 (Player libs): {result}")
+        methods_tried += 1
+        await asyncio.sleep(1)
+    except Exception as e:
+        print(f"⚠️ Method 6 failed: {e}")
+    
+    print(f"✅ Playback trigger complete ({methods_tried} methods attempted)")
 			
 async def wait_for_video_element(target, max_attempts=20, delay=0.5):
     """Poll for video element to appear after interactions"""
