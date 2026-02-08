@@ -85,7 +85,7 @@ async def wait_for_iframe_src(page, max_attempts=30, delay=0.5):
     return None
 
 async def grab_m3u8_from_iframe(page, iframe_url):
-    """Enhanced stream detection with dynamic iframe loading support"""
+    """Enhanced stream detection with better player initialization detection"""
     found_streams = set()
     
     def handle_request(request):
@@ -119,22 +119,36 @@ async def grab_m3u8_from_iframe(page, iframe_url):
         except:
             print("⚠️ Network idle timeout - continuing anyway")
         
+        # Check if player library is actually loaded
+        player_status = await page.evaluate("""
+            () => {
+                const status = {
+                    jwplayer: typeof window.jwplayer !== 'undefined',
+                    hls: typeof window.hls !== 'undefined',
+                    videojs: typeof window.videojs !== 'undefined',
+                    video_elements: document.querySelectorAll('video').length,
+                    iframes: document.querySelectorAll('iframe').length,
+                    scripts: Array.from(document.scripts).map(s => s.src).filter(s => s).length
+                };
+                return status;
+            }
+        """)
+        print(f"📊 Player status: {player_status}")
+        
         # Aggressive interaction to trigger lazy-loaded content
         print("🖱️ Triggering interactions to load player...")
         try:
             viewport = page.viewport_size
             center_x = viewport['width'] // 2
             center_y = viewport['height'] // 2
-            await page.mouse.move(center_x, center_y)
-            await page.mouse.click(center_x, center_y)
-            await asyncio.sleep(2)
+            
+            # Multiple click attempts
+            for i in range(3):
+                await page.mouse.move(center_x, center_y)
+                await page.mouse.click(center_x, center_y)
+                await asyncio.sleep(0.5)
         except Exception as e:
             print(f"⚠️ Interaction failed: {e}")
-        
-        # DEBUG: Check page content
-        html = await page.content()
-        iframe_count = html.count('<iframe')
-        print(f"🔍 Page HTML length: {len(html)} bytes, Iframes: {iframe_count}")
         
         # Wait for iframe src to be populated
         nested_iframe_url = await wait_for_iframe_src(page, max_attempts=40, delay=0.5)
@@ -148,7 +162,28 @@ async def grab_m3u8_from_iframe(page, iframe_url):
                 print("⚠️ Network idle timeout (nested)")
             await asyncio.sleep(2)
         
-        # Check for video elements
+        # Wait for player to initialize before triggering playback
+        print("⏳ Waiting for player initialization...")
+        player_ready = await page.evaluate("""
+            async () => {
+                for (let i = 0; i < 20; i++) {
+                    if (window.jwplayer && window.jwplayer().isReady && window.jwplayer().isReady()) {
+                        return 'jwplayer ready';
+                    }
+                    if (window.videojs && Object.keys(window.videojs.players).length > 0) {
+                        return 'videojs ready';
+                    }
+                    if (document.querySelector('video')) {
+                        return 'video element found';
+                    }
+                    await new Promise(r => setTimeout(r, 500));
+                }
+                return 'timeout - no player detected';
+            }
+        """)
+        print(f"🎮 Player initialization result: {player_ready}")
+        
+                # Check for video elements
         all_frames = get_all_frames(page.main_frame)
         print(f"📊 Found {len(all_frames)} total frames")
         
@@ -168,7 +203,22 @@ async def grab_m3u8_from_iframe(page, iframe_url):
         await trigger_playback(page)
         
         # Wait for streams to be captured
-        await asyncio.sleep(3)
+        await asyncio.sleep(5)
+        
+        # NEW: Check console for errors that might indicate why player failed
+        console_logs = await page.evaluate("""
+            () => {
+                return {
+                    errors: window.__errors__ || [],
+                    player_config: window.__PLAYER_CONFIG__ || window.playerConfig || null,
+                    hls_config: window.__HLS_CONFIG__ || null
+                };
+            }
+        """)
+        if console_logs.get('errors'):
+            print(f"⚠️ Console errors detected: {console_logs['errors']}")
+        if console_logs.get('player_config'):
+            print(f"🔧 Player config found: {str(console_logs['player_config'])[:200]}...")
         
         # Validate and return found streams
         valid_streams = set()
@@ -187,13 +237,14 @@ async def grab_m3u8_from_iframe(page, iframe_url):
         return set()
     except Exception as e:
         print(f"❌ Error in grab_m3u8_from_iframe: {e}")
+        import traceback
+        traceback.print_exc()
         return set()
     finally:
         page.remove_listener("request", handle_request)
         page.remove_listener("response", handle_response)
         print("🧹 Cleaned up event listeners")
-
-
+		
 async def trigger_playback(page):
     """Trigger playback using multiple methods to activate player"""
     methods_tried = 0
