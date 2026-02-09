@@ -76,24 +76,24 @@ async def get_embed_url(session: aiohttp.ClientSession, stream_id: str) -> Optio
 # -----------------------
 async def intercept_m3u8_requests(page: Page, observation: StreamObservation):
     """Intercept network requests for .m3u8 and record them with headers"""
-
     async def handle_request(route: Route, request: Request):
         url = request.url
         if ".m3u8" in url:
-            # Record headers
             headers = dict(request.headers)
             observation.requests.append(NetworkEvent(time.time(), url, request.method, request.resource_type, headers))
             observation.verdict = "hls_observed"
         await route.continue_()
 
     await page.route("**/*", handle_request)
+    return handle_request  # return handler for later removal
 
 async def scrape_embed(page: Page, embed_url: str, observation: StreamObservation) -> List[str]:
     """Visit embed URL and capture HLS requests via network interception"""
     try:
-        await intercept_m3u8_requests(page, observation)
+        handler = await intercept_m3u8_requests(page, observation)
         await page.goto(embed_url, wait_until="domcontentloaded", timeout=30_000)
         await asyncio.sleep(3)  # wait for network requests
+        await page.unroute("**/*", handler)  # remove interception after scraping
         return [req.url for req in observation.requests]
     except Exception as e:
         logging.warning(f"Scrape failed for {embed_url}: {e}")
@@ -107,8 +107,12 @@ def build_safe_playlist(observations: List[StreamObservation]) -> str:
     for obs in observations:
         if obs.verdict != "hls_observed" or not obs.requests:
             continue
+        seen = set()
         for req in obs.requests:
-            # Build VLC header string
+            if req.url in seen:
+                continue
+            seen.add(req.url)
+
             headers_str = ""
             if req.headers:
                 if "user-agent" in req.headers:
