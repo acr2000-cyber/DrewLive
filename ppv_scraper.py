@@ -2,10 +2,10 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional
+from typing import List, Optional, Dict
 
 import aiohttp
-from playwright.async_api import async_playwright, Page, Request
+from playwright.async_api import async_playwright, Page, Browser
 
 # -----------------------
 # Configuration
@@ -72,87 +72,83 @@ async def get_embed_url(session: aiohttp.ClientSession, stream_id: str) -> Optio
     return None
 
 # -----------------------
-# Scraping helpers
+# HLS capture helpers
 # -----------------------
 async def capture_hls_requests(page: Page, observation: StreamObservation):
-    """Intercept all network requests and record HLS (.m3u8) URLs"""
-    def handle_request(request: Request):
+    """Capture HLS streams from requests, responses, and page JS"""
+
+    def request_logger(request):
         url = request.url
         if ".m3u8" in url:
-            observation.requests.append(
-                NetworkEvent(time.time(), url, request.method, request.resource_type, dict(request.headers))
-            )
+            observation.requests.append(NetworkEvent(time.time(), url, request.method, request.resource_type, dict(request.headers)))
             observation.verdict = "hls_observed"
+            logging.info(f"[REQUEST] Captured HLS: {url}")
 
-    page.on("request", handle_request)
+    def response_logger(response):
+        url = response.url
+        if ".m3u8" in url:
+            headers = dict(response.request.headers)
+            observation.requests.append(NetworkEvent(time.time(), url, response.request.method, response.request.resource_type, headers))
+            observation.verdict = "hls_observed"
+            logging.info(f"[RESPONSE] Captured HLS: {url}")
 
-async def extract_hls_from_dom(page: Page) -> List[str]:
-    """Fallback: get HLS URLs from <video> tags or embedded scripts"""
+    page.on("request", request_logger)
+    page.on("response", response_logger)
+
+async def extract_hls_from_page(page: Page) -> List[str]:
+    """Extract HLS from inline JS / Hls.js objects"""
     urls = set()
     try:
-        # video/source tags
-        video_srcs = await page.evaluate(
-            """() => Array.from(document.querySelectorAll('video, video source'))
-                   .map(v => v.src || v.currentSrc)
-                   .filter(u => u && u.includes('.m3u8'))"""
-        )
-        urls.update(video_srcs)
-
-        # inline scripts HLS detection
-        script_urls = await page.evaluate(
-            """() => {
-                const urls = [];
+        js_hls = await page.evaluate("""() => {
+            const found = [];
+            if (window.hls && window.hls.media && window.hls.media.currentSrc) {
+                found.push(window.hls.media.currentSrc);
+            }
+            if (window.Hls && window.Hls.version) {
                 document.querySelectorAll('script').forEach(s => {
-                    const matches = s.textContent?.match(/https?:\/\/[^\s<>"']+\\.m3u8[^\s<>"']*/g);
-                    if (matches) urls.push(...matches);
+                    const matches = s.textContent?.match(/https?:\/\/[^\\s<>"']+\\.m3u8[^\\s<>"']*/g);
+                    if (matches) found.push(...matches);
                 });
-                return urls;
-            }"""
-        )
-        urls.update(script_urls)
+            }
+            return found;
+        }""")
+        urls.update(js_hls)
     except Exception as e:
-        logging.debug(f"DOM HLS extraction failed: {e}")
+        logging.debug(f"extract_hls_from_page error: {e}")
     return list(urls)
 
 async def scrape_embed(page: Page, embed_url: str, observation: StreamObservation):
-    """Visit embed URL, intercept network requests, and fallback to DOM scraping"""
+    """Visit embed URL, capture HLS requests/responses and inline JS"""
     try:
         await capture_hls_requests(page, observation)
         await page.goto(embed_url, wait_until="domcontentloaded", timeout=30_000)
-
-        # Wait long enough for JS player to load streams
-        await asyncio.sleep(10)
-
-        # fallback DOM extraction
-        hls_urls = await extract_hls_from_dom(page)
-        for url in hls_urls:
-            observation.requests.append(NetworkEvent(time.time(), url, "GET", "media", DEFAULT_HEADERS))
+        await asyncio.sleep(3)
+        js_urls = await extract_hls_from_page(page)
+        for url in js_urls:
+            observation.requests.append(NetworkEvent(time.time(), url, "GET", "media"))
             observation.verdict = "hls_observed"
-
     except Exception as e:
         logging.warning(f"Scrape failed for {embed_url}: {e}")
 
 # -----------------------
 # Playlist builder
 # -----------------------
-def build_safe_playlist(observations: List[StreamObservation], filename="PPVLand.m3u8") -> str:
+def build_safe_playlist(observations: List[StreamObservation]) -> str:
     playlist = "#EXTM3U\n"
     for obs in observations:
         if obs.verdict != "hls_observed" or not obs.requests:
             continue
         for req in obs.requests:
             headers_str = ""
-            headers = req.headers
-            if headers:
-                if "user-agent" in headers:
-                    headers_str += f"#EXTVLCOPT:http-user-agent={headers['user-agent']}\n"
-                if "referer" in headers:
-                    headers_str += f"#EXTVLCOPT:http-referrer={headers['referer']}\n"
-                if "origin" in headers:
-                    headers_str += f"#EXTVLCOPT:http-origin={headers['origin']}\n"
+            h = req.headers
+            if h:
+                if "user-agent" in h:
+                    headers_str += f"#EXTVLCOPT:http-user-agent={h['user-agent']}\n"
+                if "referer" in h:
+                    headers_str += f"#EXTVLCOPT:http-referrer={h['referer']}\n"
+                if "origin" in h:
+                    headers_str += f"#EXTVLCOPT:http-origin={h['origin']}\n"
             playlist += f'#EXTINF:-1 tvg-name="{obs.stream_id}",{obs.stream_id}\n{req.url}\n{headers_str}'
-    with open(filename, "w", encoding="utf-8") as f:
-        f.write(playlist)
     return playlist
 
 # -----------------------
@@ -167,7 +163,7 @@ async def main():
         logging.info(f"Found {len(streams)} streams after normalization")
 
         async with async_playwright() as p:
-            browser = await p.firefox.launch(headless=True)
+            browser: Browser = await p.firefox.launch(headless=True)
             context = await browser.new_context()
             page = await context.new_page()
 
@@ -185,8 +181,12 @@ async def main():
 
                 await asyncio.sleep(1)  # rate limit
 
-            build_safe_playlist(observations)
-            logging.info(f"Saved playlist with {len([o for o in observations if o.verdict=='hls_observed'])} streams")
+            playlist = build_safe_playlist(observations)
+            with open("PPVLand.m3u8", "w", encoding="utf-8") as f:
+                f.write(playlist)
+
+            captured_count = len([o for o in observations if o.verdict=="hls_observed"])
+            logging.info(f"Saved playlist with {captured_count} streams")
 
             await page.close()
             await context.close()
