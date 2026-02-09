@@ -22,7 +22,7 @@ jobs:
       
       - name: Install dependencies
         run: |
-          pip install playwright aiohttp
+          pip install playwright aiohttp brotli
           playwright install firefox
           playwright install-deps
       
