@@ -17,9 +17,15 @@ REQUEST_HEADERS = {
     "Referer": "https://ppv.to/",
 }
 
-# -------------------------
-# Data model (no logic)
-# -------------------------
+CUSTOM_HEADERS = [
+    "#EXTVLCOPT:http-origin=https://ppv.to",
+    "#EXTVLCOPT:http-referrer=https://ppv.to/",
+    "#EXTVLCOPT:http-user-agent=Mozilla/5.0",
+]
+
+# --------------------------------------------------
+# Data models (pure data, no scraping logic)
+# --------------------------------------------------
 
 @dataclass
 class NetworkEvent:
@@ -28,6 +34,7 @@ class NetworkEvent:
     method: str
     resource_type: str
     status: Optional[int] = None
+
 
 @dataclass
 class StreamObservation:
@@ -39,71 +46,77 @@ class StreamObservation:
     notes: Optional[str] = None
 
 
-# -------------------------
+# --------------------------------------------------
 # API phase
-# -------------------------
+# --------------------------------------------------
 
 async def fetch_streams(session: aiohttp.ClientSession) -> list[dict]:
     async with session.get(API_URL, headers=REQUEST_HEADERS) as resp:
         if resp.status != 200:
-            logger.error("API failed")
+            logger.error(f"API failed with status {resp.status}")
             return []
         return await resp.json()
 
 
-# -------------------------
+# --------------------------------------------------
 # Observation phase
-# -------------------------
+# --------------------------------------------------
 
 async def observe_embed(page: Page, stream_id: str, embed_url: str) -> StreamObservation:
     obs = StreamObservation(stream_id=stream_id, embed_url=embed_url)
 
     def on_request(req):
-        obs.requests.append(NetworkEvent(
-            ts=time.time(),
-            url=req.url,
-            method=req.method,
-            resource_type=req.resource_type
-        ))
+        obs.requests.append(
+            NetworkEvent(
+                ts=time.time(),
+                url=req.url,
+                method=req.method,
+                resource_type=req.resource_type,
+            )
+        )
 
     def on_response(res):
-        obs.responses.append(NetworkEvent(
-            ts=time.time(),
-            url=res.url,
-            method=res.request.method,
-            resource_type=res.request.resource_type,
-            status=res.status
-        ))
+        obs.responses.append(
+            NetworkEvent(
+                ts=time.time(),
+                url=res.url,
+                method=res.request.method,
+                resource_type=res.request.resource_type,
+                status=res.status,
+            )
+        )
 
     page.on("request", on_request)
     page.on("response", on_response)
 
-    logger.info(f"▶ Observing {embed_url}")
+    logger.info(f"▶ Observing embed {stream_id}")
     await page.goto(embed_url, wait_until="domcontentloaded")
 
-    # minimal playback intent (no brute force)
+    # Minimal playback intent (no brute force, no loops)
     try:
         await page.mouse.click(400, 300, timeout=3000)
     except Exception:
         pass
 
-    # observation window
+    # Observation window
     await asyncio.sleep(6)
 
     classify_observation(obs)
     return obs
 
 
-# -------------------------
+# --------------------------------------------------
 # Classification phase
-# -------------------------
+# --------------------------------------------------
 
 def classify_observation(obs: StreamObservation) -> None:
-    urls = [r.url for r in obs.requests]
+    media_requests = [
+        r for r in obs.requests
+        if r.resource_type in ("media", "xhr", "fetch")
+    ]
 
-    media = [r for r in obs.requests if r.resource_type in ("media", "xhr", "fetch")]
-    m3u8 = [r for r in media if ".m3u8" in r.url]
-    blobs = [r for r in media if r.url.startswith("blob:")]
+    m3u8 = [r for r in media_requests if ".m3u8" in r.url]
+    blobs = [r for r in media_requests if r.url.startswith("blob:")]
 
     if m3u8:
         obs.verdict = "hls_observed"
@@ -111,47 +124,10 @@ def classify_observation(obs: StreamObservation) -> None:
     elif blobs:
         obs.verdict = "media_blob_based"
         obs.notes = "MediaSource / blob transport"
-    elif media:
+    elif media_requests:
         obs.verdict = "media_no_playlist"
-        obs.notes = "Media requested but no HLS"
-    elif urls:
+        obs.notes = "Media requested without HLS"
+    elif obs.requests:
         obs.verdict = "no_media_activity"
         obs.notes = "Only static resources"
     else:
-        obs.verdict = "no_network_activity"
-
-
-# -------------------------
-# Orchestration
-# -------------------------
-
-async def main():
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-
-    async with aiohttp.ClientSession() as session:
-        streams = await fetch_streams(session)
-
-    async with async_playwright() as p:
-        browser = await p.firefox.launch(headless=True)
-
-        for s in streams:
-            stream_id = str(s.get("id"))
-            embed_url = f"https://ppv.to/embed/{stream_id}"
-
-            context = await browser.new_context(extra_http_headers=REQUEST_HEADERS)
-            page = await context.new_page()
-
-            obs = await observe_embed(page, stream_id, embed_url)
-
-            logger.info(
-                f"[{stream_id}] verdict={obs.verdict} "
-                f"requests={len(obs.requests)}"
-            )
-
-            await context.close()
-
-        await browser.close()
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
