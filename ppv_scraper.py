@@ -131,3 +131,97 @@ def classify_observation(obs: StreamObservation) -> None:
         obs.verdict = "no_media_activity"
         obs.notes = "Only static resources"
     else:
+        obs.verdict = "no_network_activity"
+
+
+# --------------------------------------------------
+# Playlist builder (SAFE)
+# --------------------------------------------------
+
+def build_safe_playlist(
+    observations: list[StreamObservation],
+    custom_headers: list[str] | None = None,
+) -> str:
+    """
+    Build an M3U playlist using ONLY verified HLS observations.
+    """
+    lines = ["#EXTM3U"]
+
+    for obs in observations:
+        if obs.verdict != "hls_observed":
+            continue
+
+        m3u8_urls = [
+            r.url
+            for r in obs.requests
+            if r.resource_type in ("media", "xhr", "fetch")
+            and ".m3u8" in r.url
+        ]
+
+        if not m3u8_urls:
+            continue
+
+        url = m3u8_urls[0]
+
+        lines.append(
+            f'#EXTINF:-1 tvg-id="{obs.stream_id}",Stream {obs.stream_id}'
+        )
+
+        if custom_headers:
+            header_blob = "|".join(custom_headers)
+            lines.append(f"{url}|{header_blob}")
+        else:
+            lines.append(url)
+
+    return "\n".join(lines) + "\n"
+
+
+# --------------------------------------------------
+# Orchestration
+# --------------------------------------------------
+
+async def main():
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(message)s",
+    )
+
+    async with aiohttp.ClientSession() as session:
+        streams = await fetch_streams(session)
+
+    observations: list[StreamObservation] = []
+
+    async with async_playwright() as p:
+        browser = await p.firefox.launch(headless=True)
+
+        for s in streams:
+            stream_id = str(s.get("id"))
+            embed_url = f"https://ppv.to/embed/{stream_id}"
+
+            context = await browser.new_context(
+                extra_http_headers=REQUEST_HEADERS
+            )
+            page = await context.new_page()
+
+            obs = await observe_embed(page, stream_id, embed_url)
+            observations.append(obs)
+
+            logger.info(
+                f"[{stream_id}] verdict={obs.verdict} "
+                f"requests={len(obs.requests)}"
+            )
+
+            await context.close()
+
+        await browser.close()
+
+    playlist = build_safe_playlist(observations, CUSTOM_HEADERS)
+
+    with open("ppv_streams.m3u", "w", encoding="utf-8") as f:
+        f.write(playlist)
+
+    logger.info("Playlist written: ppv_streams.m3u")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
