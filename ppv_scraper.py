@@ -2,7 +2,7 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import List, Optional, Dict
+from typing import List, Dict, Optional
 
 import aiohttp
 from playwright.async_api import async_playwright, Page, Route, Request
@@ -75,25 +75,26 @@ async def get_embed_url(session: aiohttp.ClientSession, stream_id: str) -> Optio
 # Scraping helpers
 # -----------------------
 async def intercept_m3u8_requests(page: Page, observation: StreamObservation):
-    """Intercept network requests for .m3u8 and record them with headers"""
+    """Intercept .m3u8 network requests and capture headers"""
     async def handle_request(route: Route, request: Request):
         url = request.url
         if ".m3u8" in url:
             headers = dict(request.headers)
             observation.requests.append(NetworkEvent(time.time(), url, request.method, request.resource_type, headers))
             observation.verdict = "hls_observed"
+            print(f"[DEBUG] Captured HLS: {url}")
         await route.continue_()
+    
+    # Intercept only .m3u8 URLs for efficiency
+    await page.route("**/*.m3u8*", handle_request)
 
-    await page.route("**/*", handle_request)
-    return handle_request  # return handler for later removal
-
-async def scrape_embed(page: Page, embed_url: str, observation: StreamObservation) -> List[str]:
-    """Visit embed URL and capture HLS requests via network interception"""
+async def scrape_embed(page: Page, embed_url: str, observation: StreamObservation):
+    """Visit embed URL and capture HLS requests"""
     try:
-        handler = await intercept_m3u8_requests(page, observation)
-        await page.goto(embed_url, wait_until="domcontentloaded", timeout=30_000)
-        await asyncio.sleep(3)  # wait for network requests
-        await page.unroute("**/*", handler)  # remove interception after scraping
+        await intercept_m3u8_requests(page, observation)
+        await page.goto(embed_url, wait_until="networkidle", timeout=30_000)
+        # Wait extra to ensure HLS requests fire
+        await asyncio.sleep(5)
         return [req.url for req in observation.requests]
     except Exception as e:
         logging.warning(f"Scrape failed for {embed_url}: {e}")
@@ -107,21 +108,19 @@ def build_safe_playlist(observations: List[StreamObservation]) -> str:
     for obs in observations:
         if obs.verdict != "hls_observed" or not obs.requests:
             continue
-        seen = set()
         for req in obs.requests:
-            if req.url in seen:
-                continue
-            seen.add(req.url)
-
+            # Build VLC headers
             headers_str = ""
             if req.headers:
-                if "user-agent" in req.headers:
-                    headers_str += f"#EXTVLCOPT:http-user-agent={req.headers['user-agent']}\n"
-                if "referer" in req.headers:
-                    headers_str += f"#EXTVLCOPT:http-referrer={req.headers['referer']}\n"
-                if "origin" in req.headers:
-                    headers_str += f"#EXTVLCOPT:http-origin={req.headers['origin']}\n"
-
+                ua = req.headers.get("user-agent")
+                referer = req.headers.get("referer")
+                origin = req.headers.get("origin")
+                if ua:
+                    headers_str += f"#EXTVLCOPT:http-user-agent={ua}\n"
+                if referer:
+                    headers_str += f"#EXTVLCOPT:http-referrer={referer}\n"
+                if origin:
+                    headers_str += f"#EXTVLCOPT:http-origin={origin}\n"
             playlist += f'#EXTINF:-1 tvg-name="{obs.stream_id}",{obs.stream_id}\n{req.url}\n{headers_str}'
     return playlist
 
@@ -130,7 +129,6 @@ def build_safe_playlist(observations: List[StreamObservation]) -> str:
 # -----------------------
 async def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-
     async with aiohttp.ClientSession() as session:
         raw_streams = await fetch_streams(session)
         streams = normalize_streams(raw_streams)
@@ -156,10 +154,11 @@ async def main():
                 await asyncio.sleep(1)  # rate limit
 
             playlist = build_safe_playlist(observations)
-            with open("ppv_streams.m3u", "w", encoding="utf-8") as f:
+            with open("PPVLand.m3u8", "w", encoding="utf-8") as f:
                 f.write(playlist)
 
-            logging.info(f"Saved playlist with {len([o for o in observations if o.verdict=='hls_observed'])} streams")
+            count = len([o for o in observations if o.verdict == "hls_observed"])
+            logging.info(f"Saved playlist with {count} streams")
             await page.close()
             await context.close()
             await browser.close()
