@@ -3,6 +3,7 @@ import logging
 import time
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional
+import re
 
 import aiohttp
 from playwright.async_api import async_playwright, Page, Response
@@ -74,10 +75,11 @@ async def get_embed_url(session: aiohttp.ClientSession, stream_id: str) -> Optio
 # -----------------------
 # Scraping helpers
 # -----------------------
-async def capture_hls_requests(page: Page, observation: StreamObservation, timeout: int = 10):
-    """Capture all .m3u8 requests/responses dynamically."""
+async def capture_hls_requests(page: Page, observation: StreamObservation, timeout: int = 5):
+    """Capture .m3u8 requests via network and fallback JS evaluation."""
     urls = set()
 
+    # Network interception
     def handle_response(response: Response):
         url = response.url
         if ".m3u8" in url and url not in urls:
@@ -90,15 +92,48 @@ async def capture_hls_requests(page: Page, observation: StreamObservation, timeo
                 headers=dict(response.request.headers)
             ))
             observation.verdict = "hls_observed"
-            logging.info(f"[HLS] Captured: {url}")
+            logging.info(f"[HLS-NET] Captured: {url}")
 
     page.on("response", handle_response)
 
     try:
         await page.goto(observation.embed_url, wait_until="networkidle", timeout=30_000)
-        await asyncio.sleep(timeout)  # wait for dynamic requests
+        await asyncio.sleep(timeout)  # wait for network requests
     except Exception as e:
         logging.warning(f"Failed to load {observation.embed_url}: {e}")
+
+    # Fallback: extract HLS URLs from JS
+    if observation.verdict != "hls_observed":
+        try:
+            script_urls = await page.evaluate("""() => {
+                const urls = [];
+                // Check for Hls.js player
+                if (window.Hls && window.Hls.instances) {
+                    window.Hls.instances.forEach(h => {
+                        if (h?.url) urls.push(h.url);
+                    });
+                }
+                // Check all <script> tags
+                document.querySelectorAll('script').forEach(s => {
+                    const matches = s.textContent?.match(/https?:\/\/[^\s<>"']+\\.m3u8[^\s<>"']*/g);
+                    if (matches) urls.push(...matches);
+                });
+                return urls;
+            }""")
+            for url in script_urls:
+                if url not in urls:
+                    urls.add(url)
+                    observation.requests.append(NetworkEvent(
+                        ts=time.time(),
+                        url=url,
+                        method="GET",
+                        resource_type="media",
+                        headers={"user-agent": DEFAULT_HEADERS["User-Agent"]}
+                    ))
+                    observation.verdict = "hls_observed"
+                    logging.info(f"[HLS-JS] Captured: {url}")
+        except Exception as e:
+            logging.debug(f"JS fallback failed: {e}")
 
 # -----------------------
 # Playlist builder
@@ -145,10 +180,16 @@ async def main():
                     continue
 
                 obs = StreamObservation(stream_id=stream_id, embed_url=embed_url)
-                await capture_hls_requests(page, obs)
-                observations.append(obs)
 
-                await asyncio.sleep(1)  # rate limit
+                # Retry logic: attempt twice if first attempt fails
+                for attempt in range(2):
+                    await capture_hls_requests(page, obs, timeout=5)
+                    if obs.verdict == "hls_observed":
+                        break
+                    logging.info(f"Retrying {obs.stream_id} (attempt {attempt+2})")
+
+                observations.append(obs)
+                await asyncio.sleep(1)
 
             playlist = build_safe_playlist(observations)
             with open("PPVLand.m3u8", "w", encoding="utf-8") as f:
