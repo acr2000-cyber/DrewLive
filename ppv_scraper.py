@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 import time
 from dataclasses import dataclass, field
 from typing import List, Optional, Dict
@@ -92,9 +93,8 @@ async def scrape_embed(page: Page, embed_url: str, observation: StreamObservatio
         await intercept_m3u8_requests(page, observation)
         await page.goto(embed_url, wait_until="domcontentloaded", timeout=60_000)
 
-        # Wait for dynamic JS loading
+        # Wait for dynamic JS loading and video sources
         for _ in range(5):
-            # Check video elements for HLS
             urls = await page.evaluate(
                 """() => Array.from(document.querySelectorAll('video, video source'))
                         .map(v => v.src || v.currentSrc)
@@ -105,7 +105,7 @@ async def scrape_embed(page: Page, embed_url: str, observation: StreamObservatio
                     observation.requests.append(NetworkEvent(time.time(), u, "GET", "media", DEFAULT_HEADERS))
                     observation.verdict = "hls_observed"
                     logging.info(f"[HLS VIDEO SRC] {u}")
-            await asyncio.sleep(2)  # wait before next check
+            await asyncio.sleep(2)
 
     except Exception as e:
         logging.warning(f"Scrape failed for {embed_url}: {e}")
@@ -134,14 +134,15 @@ def build_safe_playlist(observations: List[StreamObservation]) -> str:
 async def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
+    headless_mode = os.getenv("HEADLESS", "true").lower() == "true"
+
     async with aiohttp.ClientSession() as session:
         raw_streams = await fetch_streams(session)
         streams = normalize_streams(raw_streams)
         logging.info(f"Found {len(streams)} streams after normalization")
 
         async with async_playwright() as p:
-            # Use headful for debugging dynamic HLS loading
-            browser = await p.firefox.launch(headless=False)
+            browser = await p.firefox.launch(headless=headless_mode)
             context = await browser.new_context()
             page = await context.new_page()
 
