@@ -2,7 +2,7 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 import aiohttp
 from playwright.async_api import async_playwright, Page, Route, Request
@@ -12,17 +12,11 @@ from playwright.async_api import async_playwright, Page, Route, Request
 # -----------------------
 API_URL = "https://ppv.to/api/streams"
 
-REQUEST_HEADERS = {
+DEFAULT_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:143.0) Gecko/20100101 Firefox/143.0",
     "Origin": "https://ppv.to",
     "Referer": "https://ppv.to/",
 }
-
-CUSTOM_HEADERS = [
-    "#EXTVLCOPT:http-origin=https://ppv.to",
-    "#EXTVLCOPT:http-referrer=https://ppv.to/",
-    "#EXTVLCOPT:http-user-agent=Mozilla/5.0",
-]
 
 # -----------------------
 # Data models
@@ -33,7 +27,7 @@ class NetworkEvent:
     url: str
     method: str
     resource_type: str
-    status: Optional[int] = None
+    headers: Dict[str, str] = field(default_factory=dict)
 
 @dataclass
 class StreamObservation:
@@ -47,7 +41,7 @@ class StreamObservation:
 # -----------------------
 async def fetch_streams(session: aiohttp.ClientSession) -> List[dict]:
     try:
-        async with session.get(API_URL, headers=REQUEST_HEADERS) as resp:
+        async with session.get(API_URL, headers=DEFAULT_HEADERS) as resp:
             if resp.status != 200:
                 logging.error(f"API failed with status {resp.status}")
                 return []
@@ -70,7 +64,7 @@ def normalize_streams(raw: List) -> List[dict]:
 async def get_embed_url(session: aiohttp.ClientSession, stream_id: str) -> Optional[str]:
     url = f"https://ppv.to/embed/{stream_id}"
     try:
-        async with session.head(url, headers=REQUEST_HEADERS, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+        async with session.head(url, headers=DEFAULT_HEADERS, timeout=aiohttp.ClientTimeout(total=10)) as resp:
             if resp.status == 200:
                 return url
     except Exception as e:
@@ -81,12 +75,14 @@ async def get_embed_url(session: aiohttp.ClientSession, stream_id: str) -> Optio
 # Scraping helpers
 # -----------------------
 async def intercept_m3u8_requests(page: Page, observation: StreamObservation):
-    """Intercept network requests for .m3u8 and record them"""
+    """Intercept network requests for .m3u8 and record them with headers"""
 
     async def handle_request(route: Route, request: Request):
         url = request.url
         if ".m3u8" in url:
-            observation.requests.append(NetworkEvent(time.time(), url, request.method, request.resource_type, None))
+            # Record headers
+            headers = dict(request.headers)
+            observation.requests.append(NetworkEvent(time.time(), url, request.method, request.resource_type, headers))
             observation.verdict = "hls_observed"
         await route.continue_()
 
@@ -111,9 +107,18 @@ def build_safe_playlist(observations: List[StreamObservation]) -> str:
     for obs in observations:
         if obs.verdict != "hls_observed" or not obs.requests:
             continue
-        url = obs.requests[0].url
-        headers = "|".join(CUSTOM_HEADERS)
-        playlist += f'#EXTINF:-1 tvg-name="{obs.stream_id}",{obs.stream_id}\n{url}|{headers}\n'
+        for req in obs.requests:
+            # Build VLC header string
+            headers_str = ""
+            if req.headers:
+                if "user-agent" in req.headers:
+                    headers_str += f"#EXTVLCOPT:http-user-agent={req.headers['user-agent']}\n"
+                if "referer" in req.headers:
+                    headers_str += f"#EXTVLCOPT:http-referrer={req.headers['referer']}\n"
+                if "origin" in req.headers:
+                    headers_str += f"#EXTVLCOPT:http-origin={req.headers['origin']}\n"
+
+            playlist += f'#EXTINF:-1 tvg-name="{obs.stream_id}",{obs.stream_id}\n{req.url}\n{headers_str}'
     return playlist
 
 # -----------------------
