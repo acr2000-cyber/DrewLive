@@ -2,7 +2,7 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional
+from typing import List, Optional, Dict
 
 import aiohttp
 from playwright.async_api import async_playwright, Page, Route, Request
@@ -75,30 +75,65 @@ async def get_embed_url(session: aiohttp.ClientSession, stream_id: str) -> Optio
 # Scraping helpers
 # -----------------------
 async def intercept_m3u8_requests(page: Page, observation: StreamObservation):
-    """Intercept .m3u8 network requests and capture headers"""
+    """Intercept all network requests and record .m3u8 requests"""
     async def handle_request(route: Route, request: Request):
         url = request.url
         if ".m3u8" in url:
+            # record headers
             headers = dict(request.headers)
             observation.requests.append(NetworkEvent(time.time(), url, request.method, request.resource_type, headers))
             observation.verdict = "hls_observed"
-            print(f"[DEBUG] Captured HLS: {url}")
+            print(f"[DEBUG] Intercepted HLS: {url}")
         await route.continue_()
-    
-    # Intercept only .m3u8 URLs for efficiency
-    await page.route("**/*.m3u8*", handle_request)
+    await page.route("**/*", handle_request)
+
+async def extract_m3u8_from_page(page: Page) -> List[str]:
+    """Fallback: extract HLS URLs directly from page JS"""
+    urls = []
+    try:
+        video_urls = await page.evaluate("""
+            () => Array.from(document.querySelectorAll('video, video source'))
+                .map(v => v.src || v.currentSrc)
+                .filter(u => u && u.includes('.m3u8'))
+        """)
+        urls.extend(video_urls)
+
+        hls_urls = await page.evaluate("""
+            () => {
+                const urls = [];
+                // HLS.js detection
+                if (window.hls && window.hls.media && window.hls.media.currentSrc) {
+                    urls.push(window.hls.media.currentSrc);
+                }
+                if (window.Hls && window.Hls.version) {
+                    document.querySelectorAll('script').forEach(s => {
+                        const matches = s.textContent?.match(/https?:\\/\\/[^\s<>"']+\\.m3u8[^\s<>"']*/g);
+                        if(matches) urls.push(...matches);
+                    });
+                }
+                return urls;
+            }
+        """)
+        urls.extend(hls_urls)
+    except Exception as e:
+        logging.debug(f"extract_m3u8_from_page error: {e}")
+    return urls
 
 async def scrape_embed(page: Page, embed_url: str, observation: StreamObservation):
-    """Visit embed URL and capture HLS requests"""
+    """Visit embed page, capture HLS streams via network + JS"""
     try:
         await intercept_m3u8_requests(page, observation)
-        await page.goto(embed_url, wait_until="networkidle", timeout=30_000)
-        # Wait extra to ensure HLS requests fire
-        await asyncio.sleep(5)
-        return [req.url for req in observation.requests]
+        await page.goto(embed_url, wait_until="domcontentloaded", timeout=30_000)
+        await asyncio.sleep(5)  # wait for network activity
+        # JS fallback
+        js_urls = await extract_m3u8_from_page(page)
+        for u in js_urls:
+            if not any(req.url == u for req in observation.requests):
+                observation.requests.append(NetworkEvent(time.time(), u, "GET", "media", DEFAULT_HEADERS))
+                observation.verdict = "hls_observed"
+                print(f"[DEBUG] JS-detected HLS: {u}")
     except Exception as e:
         logging.warning(f"Scrape failed for {embed_url}: {e}")
-        return []
 
 # -----------------------
 # Playlist builder
@@ -109,18 +144,14 @@ def build_safe_playlist(observations: List[StreamObservation]) -> str:
         if obs.verdict != "hls_observed" or not obs.requests:
             continue
         for req in obs.requests:
-            # Build VLC headers
             headers_str = ""
             if req.headers:
-                ua = req.headers.get("user-agent")
-                referer = req.headers.get("referer")
-                origin = req.headers.get("origin")
-                if ua:
-                    headers_str += f"#EXTVLCOPT:http-user-agent={ua}\n"
-                if referer:
-                    headers_str += f"#EXTVLCOPT:http-referrer={referer}\n"
-                if origin:
-                    headers_str += f"#EXTVLCOPT:http-origin={origin}\n"
+                if "user-agent" in req.headers:
+                    headers_str += f"#EXTVLCOPT:http-user-agent={req.headers['user-agent']}\n"
+                if "referer" in req.headers:
+                    headers_str += f"#EXTVLCOPT:http-referrer={req.headers['referer']}\n"
+                if "origin" in req.headers:
+                    headers_str += f"#EXTVLCOPT:http-origin={req.headers['origin']}\n"
             playlist += f'#EXTINF:-1 tvg-name="{obs.stream_id}",{obs.stream_id}\n{req.url}\n{headers_str}'
     return playlist
 
@@ -129,6 +160,7 @@ def build_safe_playlist(observations: List[StreamObservation]) -> str:
 # -----------------------
 async def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+
     async with aiohttp.ClientSession() as session:
         raw_streams = await fetch_streams(session)
         streams = normalize_streams(raw_streams)
@@ -150,15 +182,14 @@ async def main():
                 obs = StreamObservation(stream_id=stream_id, embed_url=embed_url)
                 await scrape_embed(page, embed_url, obs)
                 observations.append(obs)
-
                 await asyncio.sleep(1)  # rate limit
 
             playlist = build_safe_playlist(observations)
             with open("PPVLand.m3u8", "w", encoding="utf-8") as f:
                 f.write(playlist)
 
-            count = len([o for o in observations if o.verdict == "hls_observed"])
-            logging.info(f"Saved playlist with {count} streams")
+            logging.info(f"Saved playlist with {len([o for o in observations if o.verdict=='hls_observed'])} streams")
+
             await page.close()
             await context.close()
             await browser.close()
