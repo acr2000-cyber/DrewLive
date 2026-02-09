@@ -110,70 +110,6 @@ async def extract_m3u8_from_page(page: Page) -> list[str]:
                         urls.push(window.hls.media.currentSrc);
                     }
                     if (window.Hls && window.Hls.version) {
-                        // HLS.js is loaded, check for manifest
-                        const scripts = document.querySelectorAll('script');
-                        scripts.forEach(s => {
-                            if (s.textContent && s.textContent.includes('.m3u8')) {
-                                const matches = s.textContent.match(/https?:\/\/[^\s<>"']+\.m3u8[^\s<>"']*/g);
-                                if (matches) urls.push(...matches);
-                            }
-                        });
-                    }
-                    return urls;
-                }
-            """)
-            m3u8_urls.extend(hls_urls)
-            logger.debug(f"Found {len(hls_urls)} M3U8 from HLS.js")
-        except Exception as e:
-            logger.debug(f"HLS.js check failed: {e}")
-        
-        # Method 4: Check JWPlayer
-        try:
-            jwplayer_urls = await page.evaluate("""
-                () => {
-                    const urls = [];
-                    try {
-                        if (window.jwplayer && typeof window.jwplayer === 'function') {
-                            const player = window.jwplayer();
-                            if (player && player.getPlaylist) {
-                                const playlist = player.getPlaylist();
-                                if (playlist) {
-                                    playlist.forEach(item => {
-                                        if (item.file && item.file.includes('.m3u8')) {
-                                            urls.push(item.file);
-                                        }
-                                        if (item.sources) {
-                                            item.sources.forEach(source => {
-                                                if (source.file && source.file.includes('.m3u8')) {
-                                                    urls.push(source.file);
-                                                }
-                                            });
-                                        }
-                                    });
-                                }
-                            }
-                        }
-                    } catch(e) {
-                        return [];
-                    }
-                    return urls;
-                }
-            """)
-            m3u8_urls.extend(jwplayer_urls)
-            logger.debug(f"Found {len(jwplayer_urls)} M3U8 from JWPlayer")
-        except Exception as e:
-            logger.debug(f"JWPlayer check failed: {e}")
-        
-        # Method 5: Check for iframe with src containing m3u8
-        try:
-            iframe_urls = await page.evaluate("""
-                () => {
-                    const urls = [];
-                    if (window.hls && window.hls.media && window.hls.media.currentSrc) {
-                        urls.push(window.hls.media.currentSrc);
-                    }
-                    if (window.Hls && window.Hls.version) {
-                        // HLS.js is loaded, check for manifest
                         const scripts = document.querySelectorAll('script');
                         scripts.forEach(s => {
                             if (s.textContent && s.textContent.includes('.m3u8')) {
@@ -254,7 +190,11 @@ async def extract_m3u8_from_page(page: Page) -> list[str]:
         logger.debug(f"Error extracting M3U8: {e}")
     
     return m3u8_urls
-
+      
+           
+            
+        
+      
 
 async def scrape_stream_embed(page: Page, embed_url: str, timeout: int = 30) -> list[str]:
     """Scrape M3U8 URLs from ppv.to embed"""
@@ -360,7 +300,7 @@ async def build_m3u_playlist(streams: list[dict]) -> str:
     for stream in streams:
         if not stream['m3u8_urls']:
             continue
-        
+            
         title = stream['title']
         category = stream['category']
         m3u8_url = stream['m3u8_urls']  # Use first URL if multiple
@@ -368,12 +308,11 @@ async def build_m3u_playlist(streams: list[dict]) -> str:
         # Add custom headers
         headers_str = '|'.join(CUSTOM_HEADERS)
         
-                # Format: #EXTINF with headers
+        # Format: #EXTINF with headers
         playlist += f"#EXTINF:-1 tvg-name=\"{title}\" tvg-group=\"{category}\",{title}\n"
         playlist += f"{m3u8_url}|{headers_str}\n"
     
     return playlist
-
 
 async def main():
     """Main scraper function"""
