@@ -26,6 +26,10 @@ jobs:
           playwright install firefox
           playwright install-deps
       
+      # Make sure the script runs headless in CI
+      - name: Set HEADLESS env
+        run: echo "HEADLESS=true" >> $GITHUB_ENV
+      
       - name: Run scraper
         run: python ppv_scraper.py
       
