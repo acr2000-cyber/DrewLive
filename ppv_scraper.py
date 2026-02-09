@@ -2,13 +2,14 @@ import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional
+from typing import List, Optional
 
 import aiohttp
 from playwright.async_api import async_playwright, Page
 
-logger = logging.getLogger(__name__)
-
+# -----------------------
+# Configuration
+# -----------------------
 API_URL = "https://ppv.to/api/streams"
 
 REQUEST_HEADERS = {
@@ -23,10 +24,9 @@ CUSTOM_HEADERS = [
     "#EXTVLCOPT:http-user-agent=Mozilla/5.0",
 ]
 
-# --------------------------------------------------
+# -----------------------
 # Data models
-# --------------------------------------------------
-
+# -----------------------
 @dataclass
 class NetworkEvent:
     ts: float
@@ -35,60 +35,56 @@ class NetworkEvent:
     resource_type: str
     status: Optional[int] = None
 
-
 @dataclass
 class StreamObservation:
     stream_id: str
     embed_url: str
     requests: List[NetworkEvent] = field(default_factory=list)
-    responses: List[NetworkEvent] = field(default_factory=list)
     verdict: str = "unknown"
-    notes: Optional[str] = None
 
-
-# --------------------------------------------------
+# -----------------------
 # API helpers
-# --------------------------------------------------
+# -----------------------
+async def fetch_streams(session: aiohttp.ClientSession) -> List[dict]:
+    """Fetch streams from API"""
+    try:
+        async with session.get(API_URL, headers=REQUEST_HEADERS) as resp:
+            if resp.status != 200:
+                logging.error(f"API failed with status {resp.status}")
+                return []
+            return await resp.json()
+    except Exception as e:
+        logging.error(f"Error fetching streams: {e}")
+        return []
 
-async def fetch_streams(session: aiohttp.ClientSession) -> list[dict]:
-    async with session.get(API_URL, headers=REQUEST_HEADERS) as resp:
-        if resp.status != 200:
-            logger.error(f"API failed with status {resp.status}")
-            return []
-        return await resp.json()
-
-
-def normalize_streams(raw: list) -> list[dict]:
-    """Ensure every stream is a dict with at least 'id'"""
+def normalize_streams(raw: List) -> List[dict]:
+    """Ensure every stream is a dict with 'id'"""
     normalized = []
     for item in raw:
-        if isinstance(item, dict):
-            if "id" in item:
-                normalized.append(item)
+        if isinstance(item, dict) and "id" in item:
+            normalized.append(item)
         elif isinstance(item, (str, int)):
             normalized.append({"id": str(item)})
         else:
-            logger.warning(f"Unknown stream entry: {item}")
+            logging.warning(f"Unknown stream entry: {item}")
     return normalized
 
-
 async def get_embed_url(session: aiohttp.ClientSession, stream_id: str) -> Optional[str]:
+    """Check if embed URL exists"""
     url = f"https://ppv.to/embed/{stream_id}"
     try:
         async with session.head(url, headers=REQUEST_HEADERS, timeout=aiohttp.ClientTimeout(total=10)) as resp:
             if resp.status == 200:
                 return url
     except Exception as e:
-        logger.debug(f"Embed URL check failed: {e}")
+        logging.debug(f"Embed URL check failed: {e}")
     return None
 
-
-# --------------------------------------------------
+# -----------------------
 # Scraping helpers
-# --------------------------------------------------
-
+# -----------------------
 async def extract_m3u8_from_page(page: Page) -> List[str]:
-    """Extract .m3u8 URLs observed on page"""
+    """Extract .m3u8 URLs from video elements and HLS.js"""
     urls = set()
     try:
         video_srcs = await page.evaluate(
@@ -98,14 +94,11 @@ async def extract_m3u8_from_page(page: Page) -> List[str]:
         )
         urls.update(video_srcs)
 
-        # HLS.js detection
         hls_urls = await page.evaluate(
             """() => {
                 const urls = [];
-                if (window.hls && window.hls.media && window.hls.media.currentSrc) {
-                    urls.push(window.hls.media.currentSrc);
-                }
-                if (window.Hls && window.Hls.version) {
+                if (window.hls?.media?.currentSrc) urls.push(window.hls.media.currentSrc);
+                if (window.Hls?.version) {
                     document.querySelectorAll('script').forEach(s => {
                         const matches = s.textContent?.match(/https?:\/\/[^\s<>"']+\.m3u8[^\s<>"']*/g);
                         if (matches) urls.push(...matches);
@@ -116,25 +109,22 @@ async def extract_m3u8_from_page(page: Page) -> List[str]:
         )
         urls.update(hls_urls)
     except Exception as e:
-        logger.debug(f"extract_m3u8_from_page error: {e}")
-
+        logging.debug(f"extract_m3u8_from_page error: {e}")
     return list(urls)
 
-
 async def scrape_embed(page: Page, embed_url: str) -> List[str]:
+    """Scrape embed page for M3U8 URLs"""
     try:
         await page.goto(embed_url, wait_until="domcontentloaded", timeout=30_000)
         await asyncio.sleep(2)
         return await extract_m3u8_from_page(page)
     except Exception as e:
-        logger.warning(f"Scrape failed for {embed_url}: {e}")
+        logging.warning(f"Scrape failed for {embed_url}: {e}")
         return []
 
-
-# --------------------------------------------------
+# -----------------------
 # Playlist builder
-# --------------------------------------------------
-
+# -----------------------
 def build_safe_playlist(observations: List[StreamObservation]) -> str:
     """Only include streams with HLS observed"""
     playlist = "#EXTM3U\n"
@@ -146,17 +136,16 @@ def build_safe_playlist(observations: List[StreamObservation]) -> str:
         playlist += f'#EXTINF:-1 tvg-name="{obs.stream_id}",{obs.stream_id}\n{url}|{headers}\n'
     return playlist
 
-
-# --------------------------------------------------
+# -----------------------
 # Main
-# --------------------------------------------------
-
+# -----------------------
 async def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+
     async with aiohttp.ClientSession() as session:
         raw_streams = await fetch_streams(session)
         streams = normalize_streams(raw_streams)
-        logger.info(f"Found {len(streams)} streams after normalization")
+        logging.info(f"Found {len(streams)} streams after normalization")
 
         async with async_playwright() as p:
             browser = await p.firefox.launch(headless=True)
@@ -181,16 +170,14 @@ async def main():
                 observations.append(obs)
                 await asyncio.sleep(1)  # rate limit
 
-            # Build and save playlist
             playlist = build_safe_playlist(observations)
             with open("ppv_streams.m3u", "w", encoding="utf-8") as f:
                 f.write(playlist)
 
-            logger.info(f"Saved playlist with {len(observations)} streams")
+            logging.info(f"Saved playlist with {len([o for o in observations if o.verdict=='hls_observed'])} streams")
             await page.close()
             await context.close()
             await browser.close()
-
 
 if __name__ == "__main__":
     asyncio.run(main())
