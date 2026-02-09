@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 
 import aiohttp
-from playwright.async_api import async_playwright, Page
+from playwright.async_api import async_playwright, Page, Route, Request
 
 # -----------------------
 # Configuration
@@ -46,7 +46,6 @@ class StreamObservation:
 # API helpers
 # -----------------------
 async def fetch_streams(session: aiohttp.ClientSession) -> List[dict]:
-    """Fetch streams from API"""
     try:
         async with session.get(API_URL, headers=REQUEST_HEADERS) as resp:
             if resp.status != 200:
@@ -58,7 +57,6 @@ async def fetch_streams(session: aiohttp.ClientSession) -> List[dict]:
         return []
 
 def normalize_streams(raw: List) -> List[dict]:
-    """Ensure every stream is a dict with 'id'"""
     normalized = []
     for item in raw:
         if isinstance(item, dict) and "id" in item:
@@ -70,7 +68,6 @@ def normalize_streams(raw: List) -> List[dict]:
     return normalized
 
 async def get_embed_url(session: aiohttp.ClientSession, stream_id: str) -> Optional[str]:
-    """Check if embed URL exists"""
     url = f"https://ppv.to/embed/{stream_id}"
     try:
         async with session.head(url, headers=REQUEST_HEADERS, timeout=aiohttp.ClientTimeout(total=10)) as resp:
@@ -83,41 +80,25 @@ async def get_embed_url(session: aiohttp.ClientSession, stream_id: str) -> Optio
 # -----------------------
 # Scraping helpers
 # -----------------------
-async def extract_m3u8_from_page(page: Page) -> List[str]:
-    """Extract .m3u8 URLs from video elements and HLS.js"""
-    urls = set()
-    try:
-        video_srcs = await page.evaluate(
-            """() => Array.from(document.querySelectorAll('video, video source'))
-                  .map(v => v.src || v.currentSrc)
-                  .filter(u => u && u.includes('.m3u8'))"""
-        )
-        urls.update(video_srcs)
+async def intercept_m3u8_requests(page: Page, observation: StreamObservation):
+    """Intercept network requests for .m3u8 and record them"""
 
-        hls_urls = await page.evaluate(
-            """() => {
-                const urls = [];
-                if (window.hls?.media?.currentSrc) urls.push(window.hls.media.currentSrc);
-                if (window.Hls?.version) {
-                    document.querySelectorAll('script').forEach(s => {
-                        const matches = s.textContent?.match(/https?:\/\/[^\s<>"']+\.m3u8[^\s<>"']*/g);
-                        if (matches) urls.push(...matches);
-                    });
-                }
-                return urls;
-            }"""
-        )
-        urls.update(hls_urls)
-    except Exception as e:
-        logging.debug(f"extract_m3u8_from_page error: {e}")
-    return list(urls)
+    async def handle_request(route: Route, request: Request):
+        url = request.url
+        if ".m3u8" in url:
+            observation.requests.append(NetworkEvent(time.time(), url, request.method, request.resource_type, None))
+            observation.verdict = "hls_observed"
+        await route.continue_()
 
-async def scrape_embed(page: Page, embed_url: str) -> List[str]:
-    """Scrape embed page for M3U8 URLs"""
+    await page.route("**/*", handle_request)
+
+async def scrape_embed(page: Page, embed_url: str, observation: StreamObservation) -> List[str]:
+    """Visit embed URL and capture HLS requests via network interception"""
     try:
+        await intercept_m3u8_requests(page, observation)
         await page.goto(embed_url, wait_until="domcontentloaded", timeout=30_000)
-        await asyncio.sleep(2)
-        return await extract_m3u8_from_page(page)
+        await asyncio.sleep(3)  # wait for network requests
+        return [req.url for req in observation.requests]
     except Exception as e:
         logging.warning(f"Scrape failed for {embed_url}: {e}")
         return []
@@ -126,7 +107,6 @@ async def scrape_embed(page: Page, embed_url: str) -> List[str]:
 # Playlist builder
 # -----------------------
 def build_safe_playlist(observations: List[StreamObservation]) -> str:
-    """Only include streams with HLS observed"""
     playlist = "#EXTM3U\n"
     for obs in observations:
         if obs.verdict != "hls_observed" or not obs.requests:
@@ -161,13 +141,9 @@ async def main():
                     continue
 
                 obs = StreamObservation(stream_id=stream_id, embed_url=embed_url)
-                m3u8_urls = await scrape_embed(page, embed_url)
-                if m3u8_urls:
-                    obs.verdict = "hls_observed"
-                    for u in m3u8_urls:
-                        obs.requests.append(NetworkEvent(time.time(), u, "GET", "media"))
-
+                await scrape_embed(page, embed_url, obs)
                 observations.append(obs)
+
                 await asyncio.sleep(1)  # rate limit
 
             playlist = build_safe_playlist(observations)
