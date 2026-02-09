@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Dict
 
 import aiohttp
-from playwright.async_api import async_playwright, Page, Route, Request, Response
+from playwright.async_api import async_playwright, Page, Route, Request
 
 # -----------------------
 # Configuration
@@ -74,59 +74,41 @@ async def get_embed_url(session: aiohttp.ClientSession, stream_id: str) -> Optio
 # -----------------------
 # Scraping helpers
 # -----------------------
-async def scrape_embed(page: Page, embed_url: str, observation: StreamObservation):
-    """Visit embed URL and capture HLS requests via network interception and response scanning"""
-    captured_urls = set()
-
+async def intercept_m3u8_requests(page: Page, observation: StreamObservation):
+    """Intercept network requests for .m3u8 and record them with headers"""
     async def handle_request(route: Route, request: Request):
         url = request.url
-        if ".m3u8" in url and url not in captured_urls:
-            captured_urls.add(url)
-            observation.requests.append(NetworkEvent(
-                ts=time.time(),
-                url=url,
-                method=request.method,
-                resource_type=request.resource_type,
-                headers=dict(request.headers)
-            ))
+        if ".m3u8" in url:
+            headers = dict(request.headers)
+            observation.requests.append(NetworkEvent(time.time(), url, request.method, request.resource_type, headers))
             observation.verdict = "hls_observed"
-            logging.info(f"[REQUEST] Captured HLS: {url}")
+            logging.info(f"[HLS DETECTED] {url}")
         await route.continue_()
-
-    async def handle_response(response: Response):
-        try:
-            if response.status != 200:
-                return
-            content_type = response.headers.get("content-type", "")
-            if "json" in content_type or "text" in content_type:
-                body = await response.text()
-                for line in body.splitlines():
-                    if ".m3u8" in line and line not in captured_urls:
-                        captured_urls.add(line)
-                        observation.requests.append(NetworkEvent(
-                            ts=time.time(),
-                            url=line,
-                            method="GET",
-                            resource_type="xhr",
-                            headers={}
-                        ))
-                        observation.verdict = "hls_observed"
-                        logging.info(f"[RESPONSE] Captured HLS in body: {line}")
-        except Exception as e:
-            logging.debug(f"Response processing error: {e}")
-
     await page.route("**/*", handle_request)
-    page.on("response", handle_response)
 
-    for attempt in range(3):
-        try:
-            await page.goto(embed_url, wait_until="networkidle", timeout=30_000)
-            await asyncio.sleep(5 + attempt*2)  # wait for async player to load
-            if observation.verdict == "hls_observed":
-                break
-            logging.info(f"Retrying {embed_url} (attempt {attempt+1})")
-        except Exception as e:
-            logging.warning(f"Scrape failed for {embed_url}: {e}")
+async def scrape_embed(page: Page, embed_url: str, observation: StreamObservation):
+    """Visit embed URL and capture HLS requests via network interception and JS inspection"""
+    try:
+        await intercept_m3u8_requests(page, observation)
+        await page.goto(embed_url, wait_until="domcontentloaded", timeout=60_000)
+
+        # Wait for dynamic JS loading
+        for _ in range(5):
+            # Check video elements for HLS
+            urls = await page.evaluate(
+                """() => Array.from(document.querySelectorAll('video, video source'))
+                        .map(v => v.src || v.currentSrc)
+                        .filter(u => u && u.includes('.m3u8'))"""
+            )
+            for u in urls:
+                if u not in [r.url for r in observation.requests]:
+                    observation.requests.append(NetworkEvent(time.time(), u, "GET", "media", DEFAULT_HEADERS))
+                    observation.verdict = "hls_observed"
+                    logging.info(f"[HLS VIDEO SRC] {u}")
+            await asyncio.sleep(2)  # wait before next check
+
+    except Exception as e:
+        logging.warning(f"Scrape failed for {embed_url}: {e}")
 
 # -----------------------
 # Playlist builder
@@ -139,12 +121,10 @@ def build_safe_playlist(observations: List[StreamObservation]) -> str:
         for req in obs.requests:
             headers_str = ""
             if req.headers:
-                if "user-agent" in req.headers:
-                    headers_str += f"#EXTVLCOPT:http-user-agent={req.headers['user-agent']}\n"
-                if "referer" in req.headers:
-                    headers_str += f"#EXTVLCOPT:http-referrer={req.headers['referer']}\n"
-                if "origin" in req.headers:
-                    headers_str += f"#EXTVLCOPT:http-origin={req.headers['origin']}\n"
+                headers_str += f"#EXTVLCOPT:http-user-agent={req.headers.get('user-agent','')}\n"
+                headers_str += f"#EXTVLCOPT:http-referrer={req.headers.get('referer','')}\n"
+                headers_str += f"#EXTVLCOPT:http-origin={req.headers.get('origin','')}\n"
+
             playlist += f'#EXTINF:-1 tvg-name="{obs.stream_id}",{obs.stream_id}\n{req.url}\n{headers_str}'
     return playlist
 
@@ -160,7 +140,8 @@ async def main():
         logging.info(f"Found {len(streams)} streams after normalization")
 
         async with async_playwright() as p:
-            browser = await p.firefox.launch(headless=True)
+            # Use headful for debugging dynamic HLS loading
+            browser = await p.firefox.launch(headless=False)
             context = await browser.new_context()
             page = await context.new_page()
 
@@ -170,12 +151,12 @@ async def main():
                 stream_id = str(s["id"])
                 embed_url = await get_embed_url(session, stream_id)
                 if not embed_url:
+                    logging.info(f"No embed URL for stream {stream_id}")
                     continue
 
                 obs = StreamObservation(stream_id=stream_id, embed_url=embed_url)
                 await scrape_embed(page, embed_url, obs)
                 observations.append(obs)
-
                 await asyncio.sleep(1)  # rate limit
 
             playlist = build_safe_playlist(observations)
